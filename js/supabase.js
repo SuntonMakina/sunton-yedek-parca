@@ -615,22 +615,67 @@ class SupabaseService {
 
   // ==================== REQUESTS ====================
   async getRequests() {
+    let localList = [];
+    try {
+      localList = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
+      if (!Array.isArray(localList)) localList = [];
+    } catch (e) {
+      localList = [];
+    }
+
     if (this.isLive && this.client) {
       try {
         const { data, error } = await this.client.from('requests').select('*').order('created_at', { ascending: false });
         if (!error && data && data.length > 0) {
-          safeSetStorage(STORAGE_KEYS.REQUESTS, JSON.stringify(data));
-          return data;
+          // Merge remote data with local rich fields (chat_image, proforma_*) to prevent accidental image wiping
+          const mergedList = data.map(remoteItem => {
+            const localMatch = localList.find(l => 
+              (l.id && remoteItem.id && l.id === remoteItem.id) ||
+              (l.request_no && remoteItem.request_no && l.request_no === remoteItem.request_no)
+            );
+            if (localMatch) {
+              return {
+                ...localMatch,
+                ...remoteItem,
+                // Preserve local media if remote column is null or empty
+                chat_image: remoteItem.chat_image || localMatch.chat_image || '',
+                proforma_file: remoteItem.proforma_file || localMatch.proforma_file || '',
+                proforma_name: remoteItem.proforma_name || localMatch.proforma_name || '',
+                proforma_type: remoteItem.proforma_type || localMatch.proforma_type || '',
+                proforma_no: remoteItem.proforma_no || localMatch.proforma_no || '',
+                proforma_amount: remoteItem.proforma_amount || localMatch.proforma_amount || '',
+                proforma_notes: remoteItem.proforma_notes || localMatch.proforma_notes || '',
+                proforma_date: remoteItem.proforma_date || localMatch.proforma_date || ''
+              };
+            }
+            return remoteItem;
+          });
+
+          // Also keep local requests that are not yet on remote Supabase
+          localList.forEach(localItem => {
+            const exists = mergedList.some(m => 
+              (m.id && localItem.id && m.id === localItem.id) ||
+              (m.request_no && localItem.request_no && m.request_no === localItem.request_no)
+            );
+            if (!exists) {
+              mergedList.push(localItem);
+            }
+          });
+
+          safeSetStorage(STORAGE_KEYS.REQUESTS, JSON.stringify(mergedList));
+          return mergedList;
         }
       } catch (err) {
         console.warn('Supabase getRequests error:', err);
       }
     }
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
+    return localList;
   }
 
   async addRequest(req) {
-    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
+    let list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
+    if (!Array.isArray(list)) list = [];
+
     const now = new Date();
     const trDateFormatted = now.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
     const trTimeFormatted = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
@@ -645,7 +690,7 @@ class SupabaseService {
     };
 
     const clean = {
-      id: 'req-' + Date.now(),
+      id: req.id || ('req-' + Date.now()),
       request_no: req.request_no || ('TR-HSG-' + Math.floor(10000 + Math.random() * 90000)),
       company: req.company || 'Sunton Makine Sanayi A.Ş.',
       supplier_name: req.supplier_name || 'HSG Shanghai Precision Parts',
@@ -666,10 +711,11 @@ class SupabaseService {
       stage_step: step,
       stage_label: req.stage_label || stageMap[step] || 'Talep Açıldı / Mesaj Bekleniyor',
       hsg_status: req.hsg_status || 'İşleme Alındı',
-      created_at: now.toISOString(),
-      created_at_date: trDateFormatted,
-      created_at_time: trTimeFormatted
+      created_at: req.created_at || now.toISOString(),
+      created_at_date: req.created_at_date || trDateFormatted,
+      created_at_time: req.created_at_time || trTimeFormatted
     };
+
     list.unshift(clean);
     safeSetStorage(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
 
@@ -700,15 +746,42 @@ class SupabaseService {
         };
         await this.client.from('requests').insert([payload]);
       } catch (err) {
-        console.warn('Supabase addRequest error:', err);
+        console.warn('Supabase addRequest full insert failed, trying basic payload fallback:', err);
+        try {
+          const basicPayload = {
+            request_no: clean.request_no,
+            company: clean.company,
+            supplier_name: clean.supplier_name,
+            part_sku: clean.part_sku,
+            part_name: clean.part_name,
+            quantity: clean.quantity,
+            priority: clean.priority,
+            supply_channel: clean.supply_channel,
+            notes: clean.notes,
+            stage_step: clean.stage_step,
+            stage_label: clean.stage_label,
+            status: clean.stage_label,
+            created_at: clean.created_at
+          };
+          await this.client.from('requests').insert([basicPayload]);
+        } catch (fbErr) {
+          console.warn('Supabase basic insert fallback error:', fbErr);
+        }
       }
     }
     return clean;
   }
 
   async saveRequest(req) {
-    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
-    const idx = list.findIndex(r => r.id === req.id || r.request_no === req.request_no);
+    let list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
+    if (!Array.isArray(list)) list = [];
+
+    // Find by matching id or request_no
+    const idx = list.findIndex(r => 
+      (req.id && (r.id === req.id || r.request_no === req.id)) ||
+      (req.request_no && (r.request_no === req.request_no || r.id === req.request_no))
+    );
+
     const step = parseInt(req.stage_step) || (idx >= 0 ? list[idx].stage_step : 1);
     const stageMap = {
       1: 'Talep Açıldı / Mesaj Bekleniyor',
@@ -719,50 +792,106 @@ class SupabaseService {
       6: 'Merkez Depo Teslim Edildi'
     };
 
+    let updatedItem = null;
+
     if (idx >= 0) {
-      list[idx] = {
+      const originalReqNo = list[idx].request_no;
+      const originalId = list[idx].id;
+
+      updatedItem = {
         ...list[idx],
         ...req,
+        id: originalId,
+        request_no: (req.request_no && req.request_no.startsWith('TR-')) ? req.request_no : originalReqNo,
         stage_step: step,
         stage_label: req.stage_label || stageMap[step] || list[idx].stage_label,
-        quantity: parseInt(req.quantity) || list[idx].quantity || 1
+        quantity: parseInt(req.quantity) || list[idx].quantity || 1,
+        chat_image: req.chat_image !== undefined ? req.chat_image : (list[idx].chat_image || ''),
+        proforma_file: req.proforma_file !== undefined ? req.proforma_file : (list[idx].proforma_file || ''),
+        proforma_name: req.proforma_name !== undefined ? req.proforma_name : (list[idx].proforma_name || ''),
+        proforma_type: req.proforma_type !== undefined ? req.proforma_type : (list[idx].proforma_type || ''),
+        proforma_no: req.proforma_no !== undefined ? req.proforma_no : (list[idx].proforma_no || ''),
+        proforma_amount: req.proforma_amount !== undefined ? req.proforma_amount : (list[idx].proforma_amount || ''),
+        proforma_notes: req.proforma_notes !== undefined ? req.proforma_notes : (list[idx].proforma_notes || ''),
+        proforma_date: req.proforma_date !== undefined ? req.proforma_date : (list[idx].proforma_date || '')
       };
-      safeSetStorage(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
+      list[idx] = updatedItem;
+    } else {
+      updatedItem = {
+        id: req.id || ('req-' + Date.now()),
+        request_no: req.request_no || ('TR-HSG-' + Math.floor(10000 + Math.random() * 90000)),
+        ...req,
+        stage_step: step,
+        stage_label: req.stage_label || stageMap[step] || 'Talep Açıldı / Mesaj Bekleniyor',
+        quantity: parseInt(req.quantity) || 1,
+        chat_image: req.chat_image || '',
+        proforma_file: req.proforma_file || '',
+        created_at: req.created_at || new Date().toISOString()
+      };
+      list.unshift(updatedItem);
+    }
 
-      if (this.isLive && this.client) {
-        try {
-          const payload = {
-            company: list[idx].company,
-            supplier_name: list[idx].supplier_name,
-            part_name: list[idx].part_name,
-            quantity: list[idx].quantity,
-            priority: list[idx].priority,
-            supply_channel: list[idx].supply_channel,
-            notes: list[idx].notes,
-            chat_image: list[idx].chat_image,
-            proforma_file: list[idx].proforma_file,
-            proforma_name: list[idx].proforma_name,
-            proforma_type: list[idx].proforma_type,
-            proforma_no: list[idx].proforma_no,
-            proforma_amount: list[idx].proforma_amount,
-            proforma_notes: list[idx].proforma_notes,
-            proforma_date: list[idx].proforma_date,
-            stage_step: list[idx].stage_step,
-            stage_label: list[idx].stage_label,
-            status: list[idx].stage_label
-          };
-          if (this._isUUID(list[idx].id)) {
-            await this.client.from('requests').update(payload).eq('id', list[idx].id);
-          } else {
-            await this.client.from('requests').update(payload).eq('request_no', list[idx].request_no);
+    safeSetStorage(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
+
+    if (this.isLive && this.client && updatedItem) {
+      try {
+        const payload = {
+          company: updatedItem.company || 'Sunton Makine Sanayi A.Ş.',
+          supplier_name: updatedItem.supplier_name,
+          part_name: updatedItem.part_name,
+          quantity: updatedItem.quantity,
+          priority: updatedItem.priority || 'Normal',
+          supply_channel: updatedItem.supply_channel || 'HSG Çin',
+          notes: updatedItem.notes || '',
+          chat_image: updatedItem.chat_image || '',
+          proforma_file: updatedItem.proforma_file || '',
+          proforma_name: updatedItem.proforma_name || '',
+          proforma_type: updatedItem.proforma_type || '',
+          proforma_no: updatedItem.proforma_no || '',
+          proforma_amount: updatedItem.proforma_amount || '',
+          proforma_notes: updatedItem.proforma_notes || '',
+          proforma_date: updatedItem.proforma_date || '',
+          stage_step: updatedItem.stage_step,
+          stage_label: updatedItem.stage_label,
+          status: updatedItem.stage_label
+        };
+
+        if (this._isUUID(updatedItem.id)) {
+          await this.client.from('requests').update(payload).eq('id', updatedItem.id);
+        } else {
+          const res = await this.client.from('requests').update(payload).eq('request_no', updatedItem.request_no).select();
+          if (res.error || !res.data || res.data.length === 0) {
+            // Row not in Supabase yet -> insert it so it exists
+            await this.client.from('requests').insert([{
+              ...payload,
+              request_no: updatedItem.request_no,
+              part_sku: updatedItem.part_sku || ('SKU-' + Math.floor(1000 + Math.random() * 9000)),
+              created_at: updatedItem.created_at || new Date().toISOString()
+            }]);
           }
-        } catch (err) {
-          console.warn('Supabase saveRequest error:', err);
+        }
+      } catch (err) {
+        console.warn('Supabase saveRequest full update failed, falling back to basic payload:', err);
+        try {
+          const fallbackPayload = {
+            company: updatedItem.company,
+            supplier_name: updatedItem.supplier_name,
+            part_name: updatedItem.part_name,
+            quantity: updatedItem.quantity,
+            priority: updatedItem.priority,
+            supply_channel: updatedItem.supply_channel,
+            notes: updatedItem.notes || '',
+            stage_step: updatedItem.stage_step,
+            stage_label: updatedItem.stage_label,
+            status: updatedItem.stage_label
+          };
+          await this.client.from('requests').update(fallbackPayload).eq('request_no', updatedItem.request_no);
+        } catch (fbErr) {
+          console.warn('Supabase saveRequest fallback error:', fbErr);
         }
       }
-      return list[idx];
     }
-    return null;
+    return updatedItem;
   }
 
   async deleteRequest(idOrNo) {
@@ -771,7 +900,7 @@ class SupabaseService {
     const targetNo = target ? target.request_no : idOrNo;
 
     list = list.filter(r => r.id !== idOrNo && r.request_no !== idOrNo && (targetNo ? r.request_no !== targetNo : true));
-    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
+    safeSetStorage(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
 
     if (this.isLive && this.client) {
       try {

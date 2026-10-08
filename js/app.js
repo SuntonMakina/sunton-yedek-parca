@@ -233,7 +233,7 @@ function renderDashboard() {
                 <span class="font-bold text-slate-900 group-hover:text-blue-600 transition-colors text-sm truncate">${r.part_name}</span>
                 <span class="font-mono text-[11px] text-slate-400 font-semibold">${r.request_no}</span>
                 ${hasImage ? `
-                  <button type="button" class="inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors cursor-pointer" onclick="event.stopPropagation(); openImageLightbox('${r.chat_image}')" title="Sohbet / Parça Görselini Büyüt">
+                  <button type="button" class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors cursor-pointer shadow-2xs" onclick="event.stopPropagation(); openRequestImageModal('${r.id || r.request_no}')" title="Sohbet / Parça Görselini Büyüt">
                     <span class="material-symbols-outlined text-[13px]">image</span>
                     <span>📷 Görsel</span>
                   </button>
@@ -1153,7 +1153,38 @@ function setupDragAndDropAndPasteListeners() {
     });
   }
 
-  // 3. Form Proforma Sürükle-Bırak
+  // 3. Talep Detayı Modal Görsel Sürükle-Bırak
+  const reqDetImgDropzone = document.getElementById('reqDetImageDropzone');
+  if (reqDetImgDropzone) {
+    ['dragenter', 'dragover'].forEach(eventName => {
+      reqDetImgDropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        reqDetImgDropzone.classList.add('border-blue-500', 'bg-blue-50');
+      }, false);
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+      reqDetImgDropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        reqDetImgDropzone.classList.remove('border-blue-500', 'bg-blue-50');
+      }, false);
+    });
+    reqDetImgDropzone.addEventListener('drop', async (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files && files.length > 0) {
+        const result = await compressImageFile(files[0]);
+        if (result.base64) {
+          currentEditingRequestImage = result.base64;
+          renderRequestDetailImage();
+          showToast('✓ Görsel seçildi. "Değişiklikleri Kaydet" ile onaylayın.');
+        }
+      }
+    });
+  }
+
+  // 4. Form Proforma Sürükle-Bırak
   const profDropzone = document.getElementById('formReqProformaDropzone');
   if (profDropzone) {
     ['dragenter', 'dragover'].forEach(eventName => {
@@ -1564,6 +1595,9 @@ function closeRequestDetailModal() {
 
 async function saveRequestDetailChanges() {
   const idOrNo = document.getElementById('reqDetId').value;
+  const existing = appState.requests.find(r => r.id === idOrNo || r.request_no === idOrNo);
+  const targetReqNo = existing ? existing.request_no : (idOrNo.startsWith('TR-') ? idOrNo : '');
+  const targetId = existing ? existing.id : idOrNo;
   const notes = document.getElementById('reqDetNotes').value.trim();
   const stageInfo = getStageInfo(currentEditingRequestStage);
 
@@ -1575,11 +1609,26 @@ async function saveRequestDetailChanges() {
     currentEditingRequestProforma.amount = proformaAmt;
   }
 
+  // Anında bellek durumunu güncelle
+  if (existing) {
+    existing.stage_step = currentEditingRequestStage;
+    existing.stage_label = stageInfo.label;
+    existing.notes = notes;
+    existing.chat_image = currentEditingRequestImage;
+    existing.proforma_file = currentEditingRequestProforma.file || '';
+    existing.proforma_name = currentEditingRequestProforma.name || '';
+    existing.proforma_type = currentEditingRequestProforma.type || '';
+    existing.proforma_no = currentEditingRequestProforma.no || '';
+    existing.proforma_amount = currentEditingRequestProforma.amount || '';
+    existing.proforma_notes = currentEditingRequestProforma.notes || '';
+    existing.proforma_date = currentEditingRequestProforma.date || '';
+  }
+
   closeRequestDetailModal();
 
   await window.dbService.saveRequest({
-    id: idOrNo,
-    request_no: idOrNo,
+    id: targetId,
+    request_no: targetReqNo,
     stage_step: currentEditingRequestStage,
     stage_label: stageInfo.label,
     notes: notes,
@@ -1595,7 +1644,7 @@ async function saveRequestDetailChanges() {
 
   await loadAllData();
   renderDashboard();
-  showToast(`Talep durumu "${stageInfo.label}" olarak güncellendi.`);
+  showToast(`✓ Talep, aşama ve görsel değişiklikleri başarıyla kaydedildi.`);
 }
 
 async function deleteCurrentRequest() {
@@ -1762,6 +1811,16 @@ function printCurrentProforma() {
 }
 
 // ==================== 9. RESİM BÜYÜTME (LIGHTBOX) ====================
+function openRequestImageModal(idOrNo) {
+  const req = appState.requests.find(r => r.id === idOrNo || r.request_no === idOrNo);
+  if (req && req.chat_image) {
+    openImageLightbox(req.chat_image);
+  } else if (req) {
+    openRequestDetailModal(idOrNo);
+    showToast('Bu talebe henüz görsel eklenmemiş.');
+  }
+}
+
 function openImageLightbox(src) {
   if (!src) return;
   document.getElementById('lightboxImage').src = src;
