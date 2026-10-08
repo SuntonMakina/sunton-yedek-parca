@@ -268,8 +268,13 @@ async function handleInventorySubmit(e) {
 
 async function deleteInventory(sku) {
   if (confirm(`${sku} kodlu parçayı silmek istiyor musunuz?`)) {
+    appState.inventory = appState.inventory.filter(i => i.sku !== sku);
+    renderInventory();
+    renderDashboard();
     await window.dbService.deleteInventoryItem(sku);
     await loadAllData();
+    renderInventory();
+    renderDashboard();
     showToast(`${sku} silindi.`);
   }
 }
@@ -301,10 +306,10 @@ function renderShipments() {
             <span class="text-xs px-2 py-0.5 rounded-full font-medium ${getShipmentStatusBadge(shp.status)}">${shp.status}</span>
           </div>
           <div class="flex items-center gap-1">
-            <button class="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-600 transition-colors cursor-pointer" title="Sevkiyatı Düzenle" onclick="openEditShipmentModal('${shp.id}')">
+            <button class="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-600 transition-colors cursor-pointer" title="Sevkiyatı Düzenle" onclick="openEditShipmentModal('${shp.id || shp.tracking_code}')">
               <span class="material-symbols-outlined text-[16px]">edit</span>
             </button>
-            <button class="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-600 transition-colors cursor-pointer" title="Sevkiyatı Sil" onclick="deleteShipment('${shp.id}')">
+            <button class="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-600 transition-colors cursor-pointer" title="Sevkiyatı Sil" onclick="deleteShipment('${shp.id || shp.tracking_code}')">
               <span class="material-symbols-outlined text-[16px]">delete</span>
             </button>
           </div>
@@ -400,6 +405,7 @@ async function handleShipmentSubmit(e) {
   const status = document.getElementById('modalShipStatus').value;
   const progress_percentage = parseInt(document.getElementById('modalShipProgress').value) || 0;
 
+  closeShipmentModal();
   await window.dbService.saveShipment({
     id: id || undefined,
     tracking_code,
@@ -414,18 +420,27 @@ async function handleShipmentSubmit(e) {
     progress_percentage
   });
 
-  closeShipmentModal();
   await loadAllData();
+  renderShipments();
+  renderDashboard();
   showToast(`${tracking_code} sevkiyatı kaydedildi.`);
 }
 
 async function deleteShipment(id) {
   const shp = appState.shipments.find(s => s.id === id || s.tracking_code === id);
   const code = shp ? shp.tracking_code : id;
+  const targetId = shp ? (shp.id || shp.tracking_code) : id;
+
   if (confirm(`${code} kodlu sevkiyatı silmek istediğinize emin misiniz?`)) {
-    await window.dbService.deleteShipment(id);
+    appState.shipments = appState.shipments.filter(s => s.id !== targetId && s.tracking_code !== code);
     closeShipmentModal();
+    renderShipments();
+    renderDashboard();
+
+    await window.dbService.deleteShipment(targetId);
     await loadAllData();
+    renderShipments();
+    renderDashboard();
     showToast(`${code} silindi.`);
   }
 }
@@ -458,7 +473,7 @@ function renderReminders() {
 
       <div class="flex items-center gap-3 shrink-0">
         <span class="text-xs font-bold ${rem.days_left <= 2 ? 'text-red-600' : 'text-slate-700'}">${rem.days_left} Gün Kaldı</span>
-        <button class="bg-slate-900 hover:bg-slate-800 text-white px-3 py-1 rounded text-xs font-medium cursor-pointer" onclick="completeReminder('${rem.id}')">Tamamla</button>
+        <button class="bg-slate-900 hover:bg-slate-800 text-white px-3 py-1 rounded text-xs font-medium cursor-pointer" onclick="completeReminder('${rem.id || rem.reference_id}')">Tamamla</button>
       </div>
     </div>
   `).join('');
@@ -479,15 +494,22 @@ async function handleReminderSubmit(e) {
   const title = document.getElementById('modalRemTitle').value;
   const days_left = parseInt(document.getElementById('modalRemDays').value) || 3;
 
-  await window.dbService.addReminder({ supplier_name, target_type, title, days_left });
   closeReminderModal();
+  await window.dbService.addReminder({ supplier_name, target_type, title, days_left });
   await loadAllData();
+  renderReminders();
+  renderDashboard();
   showToast(`${supplier_name} için hatırlatıcı eklendi.`);
 }
 
 async function completeReminder(id) {
+  appState.reminders = appState.reminders.filter(r => r.id !== id && r.reference_id !== id);
+  renderReminders();
+  renderDashboard();
   await window.dbService.completeReminder(id);
   await loadAllData();
+  renderReminders();
+  renderDashboard();
   showToast('Hatırlatıcı tamamlandı.');
 }
 
@@ -515,16 +537,16 @@ function renderSuppliers() {
             <h4 class="font-semibold text-slate-900 text-sm group-hover:text-blue-600 transition-colors">${sup.name}</h4>
             <div class="flex items-center gap-1">
               <span class="text-[11px] px-2 py-0.5 rounded-full font-medium ${sup.category === 'china' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}">${sup.category === 'china' ? 'Çin HSG' : (sup.category === 'global' ? 'Global' : 'Türkiye Bayi')}</span>
-              <button class="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-blue-600 transition-colors cursor-pointer" title="Firmayı Düzenle" onclick="event.stopPropagation(); openEditSupplierModal('${sup.id}')">
+              <button class="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-blue-600 transition-colors cursor-pointer" title="Firmayı Düzenle" onclick="event.stopPropagation(); openEditSupplierModal('${sup.id || sup.name}')">
                 <span class="material-symbols-outlined text-[16px]">edit</span>
               </button>
-              <button class="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-600 transition-colors cursor-pointer" title="Firmayı Sil" onclick="event.stopPropagation(); deleteSupplier('${sup.id}')">
+              <button class="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-600 transition-colors cursor-pointer" title="Firmayı Sil" onclick="event.stopPropagation(); deleteSupplier('${sup.id || sup.name}')">
                 <span class="material-symbols-outlined text-[16px]">delete</span>
               </button>
             </div>
           </div>
-          <div class="text-xs text-slate-500 mb-2">${sup.location} • <span class="font-mono">${sup.code}</span></div>
-          <div class="text-xs text-slate-700 mb-1"><strong>Yetkili:</strong> ${sup.contact_person}</div>
+          <div class="text-xs text-slate-500 mb-2">${sup.location || ''} • <span class="font-mono">${sup.code || ''}</span></div>
+          <div class="text-xs text-slate-700 mb-1"><strong>Yetkili:</strong> ${sup.contact_person || '-'}</div>
           <div class="text-xs text-slate-700 mb-1"><strong>Tel:</strong> ${sup.phone || '+90 212 555 0000'}</div>
           ${sup.email ? `<div class="text-xs text-slate-500 mb-2"><strong>E-posta:</strong> ${sup.email}</div>` : ''}
         </div>
@@ -553,7 +575,7 @@ function openSupplierHistoryModal(supplierName) {
   const badgeEl = document.getElementById('histSupBadge');
   badgeEl.textContent = sup.category === 'china' ? 'Çin HSG Partner' : (sup.category === 'global' ? 'Global Tedarikçi' : 'Türkiye Bayisi');
   badgeEl.className = `text-xs px-2.5 py-0.5 rounded-full font-medium ${sup.category === 'china' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`;
-  document.getElementById('histSupMeta').textContent = `${sup.location} • Yetkili: ${sup.contact_person} • Tel: ${sup.phone || '-'}`;
+  document.getElementById('histSupMeta').textContent = `${sup.location || ''} • Yetkili: ${sup.contact_person || '-'} • Tel: ${sup.phone || '-'}`;
 
   // 2. Bu Tedarikçiden Alınan Parçalar & Siparişler
   const requests = appState.requests.filter(r => r.supplier_name === supplierName);
@@ -655,11 +677,11 @@ function openAddSupplierModal() {
 }
 
 function openEditSupplierModal(idOrName) {
-  const sup = appState.suppliers.find(s => s.id === idOrName || s.name === idOrName);
+  const sup = appState.suppliers.find(s => s.id === idOrName || s.name === idOrName || s.code === idOrName);
   if (!sup) return;
 
   document.getElementById('supplierModalTitle').textContent = `Firma Bilgilerini Düzenle (${sup.name})`;
-  document.getElementById('modalSupId').value = sup.id;
+  document.getElementById('modalSupId').value = sup.id || sup.name;
   document.getElementById('modalSupOrigName').value = sup.name;
   document.getElementById('modalSupName').value = sup.name;
   document.getElementById('modalSupCode').value = sup.code || '';
@@ -707,20 +729,43 @@ async function handleSupplierSubmit(e) {
     localStorage.setItem('sunton_reminders_data', JSON.stringify(appState.reminders));
   }
 
-  await window.dbService.saveSupplier({ id: id || undefined, originalName, name, code, category, location, contact_person, phone, email });
   closeSupplierModal();
+  await window.dbService.saveSupplier({ id: id || undefined, originalName, name, code, category, location, contact_person, phone, email });
   await loadAllData();
+  renderSuppliers();
+  renderDashboard();
+  populateSupplierDropdowns();
   showToast(`${name} başarıyla kaydedildi.`);
 }
 
 async function deleteSupplier(id) {
-  const sup = appState.suppliers.find(s => s.id === id || s.name === id);
+  const sup = appState.suppliers.find(s => s.id === id || s.name === id || s.code === id);
   const name = sup ? sup.name : id;
+  const targetId = sup ? (sup.id || sup.name) : id;
+
   if (confirm(`${name} firmasını silmek istediğinize emin misiniz?`)) {
-    await window.dbService.deleteSupplier(id);
+    // 1. Önce hafızadaki listeden anında çıkar
+    appState.suppliers = appState.suppliers.filter(s => s.id !== targetId && s.name !== name && s.name !== id);
+    
+    // 2. Modalları anında kapat
     closeSupplierModal();
+    closeSupplierHistoryModal();
+
+    // 3. Arayüzü beklemeden hemen çiz
+    renderSuppliers();
+    renderDashboard();
+    populateSupplierDropdowns();
+
+    // 4. Veritabanından sil
+    await window.dbService.deleteSupplier(targetId);
+
+    // 5. Güncel verileri çek ve tekrar çiz
     await loadAllData();
-    showToast(`${name} silindi.`);
+    renderSuppliers();
+    renderDashboard();
+    populateSupplierDropdowns();
+
+    showToast(`${name} başarıyla silindi.`);
   }
 }
 

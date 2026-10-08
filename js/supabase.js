@@ -290,17 +290,29 @@ class SupabaseService {
     };
   }
 
+  // Helper: UUID validator
+  _isUUID(str) {
+    return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+  }
+
   // ==================== INVENTORY ====================
   async getInventory() {
     if (this.isLive && this.client) {
-      const { data } = await this.client.from('inventory').select('*').order('created_at', { ascending: false });
-      if (data) return data;
+      try {
+        const { data, error } = await this.client.from('inventory').select('*').order('name', { ascending: true });
+        if (!error && data && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(data));
+          return data;
+        }
+      } catch (err) {
+        console.warn('Supabase getInventory error:', err);
+      }
     }
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.INVENTORY) || '[]');
   }
 
   async saveInventoryItem(item) {
-    const list = await this.getInventory();
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.INVENTORY) || '[]');
     const idx = list.findIndex(i => i.sku === item.sku);
     const qty = parseInt(item.quantity) || 0;
     const clean = {
@@ -316,30 +328,58 @@ class SupabaseService {
       list.unshift(clean);
     }
     localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(list));
-    if (this.isLive && this.client) await this.client.from('inventory').upsert([clean]);
+
+    if (this.isLive && this.client) {
+      try {
+        const payload = {
+          sku: clean.sku,
+          name: clean.name,
+          depot: clean.depot,
+          quantity: clean.quantity,
+          min_alert_qty: 15
+        };
+        await this.client.from('inventory').upsert([payload], { onConflict: 'sku' });
+      } catch (err) {
+        console.warn('Supabase saveInventory error:', err);
+      }
+    }
     return list;
   }
 
   async deleteInventoryItem(sku) {
-    let list = await this.getInventory();
+    let list = JSON.parse(localStorage.getItem(STORAGE_KEYS.INVENTORY) || '[]');
     list = list.filter(i => i.sku !== sku);
     localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(list));
-    if (this.isLive && this.client) await this.client.from('inventory').delete().eq('sku', sku);
+
+    if (this.isLive && this.client) {
+      try {
+        await this.client.from('inventory').delete().eq('sku', sku);
+      } catch (err) {
+        console.warn('Supabase deleteInventory error:', err);
+      }
+    }
     return list;
   }
 
   // ==================== SUPPLIERS ====================
   async getSuppliers() {
     if (this.isLive && this.client) {
-      const { data } = await this.client.from('suppliers').select('*').order('name', { ascending: true });
-      if (data) return data;
+      try {
+        const { data, error } = await this.client.from('suppliers').select('*').order('name', { ascending: true });
+        if (!error && data && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(data));
+          return data;
+        }
+      } catch (err) {
+        console.warn('Supabase getSuppliers error:', err);
+      }
     }
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.SUPPLIERS) || '[]');
   }
 
   async saveSupplier(supplier) {
-    const list = await this.getSuppliers();
-    const idx = list.findIndex(s => s.id === supplier.id || (supplier.originalName && s.name === supplier.originalName));
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.SUPPLIERS) || '[]');
+    const idx = list.findIndex(s => s.id === supplier.id || (supplier.originalName && s.name === supplier.originalName) || s.name === supplier.name);
     
     const clean = {
       id: supplier.id || 'sup-' + Date.now(),
@@ -350,7 +390,7 @@ class SupabaseService {
       location: supplier.location || 'İstanbul, TR',
       phone: supplier.phone || '+90 212 555 0000',
       email: supplier.email || '',
-      active_demands: supplier.active_demands || 0
+      active_demands_count: supplier.active_demands || supplier.active_demands_count || 0
     };
 
     if (idx >= 0) {
@@ -360,7 +400,26 @@ class SupabaseService {
     }
 
     localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(list));
-    if (this.isLive && this.client) await this.client.from('suppliers').upsert([clean]);
+
+    if (this.isLive && this.client) {
+      try {
+        const payload = {
+          name: clean.name,
+          code: clean.code,
+          category: clean.category,
+          contact_person: clean.contact_person,
+          location: clean.location,
+          phone: clean.phone,
+          email: clean.email
+        };
+        if (this._isUUID(clean.id)) {
+          payload.id = clean.id;
+        }
+        await this.client.from('suppliers').upsert([payload], { onConflict: 'code' });
+      } catch (err) {
+        console.warn('Supabase saveSupplier error:', err);
+      }
+    }
     return clean;
   }
 
@@ -368,26 +427,52 @@ class SupabaseService {
     return this.saveSupplier(supplier);
   }
 
-  async deleteSupplier(id) {
-    let list = await this.getSuppliers();
-    list = list.filter(s => s.id !== id && s.name !== id);
+  async deleteSupplier(idOrName) {
+    let list = JSON.parse(localStorage.getItem(STORAGE_KEYS.SUPPLIERS) || '[]');
+    const target = list.find(s => s.id === idOrName || s.name === idOrName || s.code === idOrName);
+    const targetName = target ? target.name : idOrName;
+    const targetCode = target ? target.code : null;
+
+    list = list.filter(s => s.id !== idOrName && s.name !== idOrName && (targetName ? s.name !== targetName : true));
     localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(list));
-    if (this.isLive && this.client) await this.client.from('suppliers').delete().eq('id', id);
+
+    if (this.isLive && this.client) {
+      try {
+        if (targetCode) {
+          await this.client.from('suppliers').delete().eq('code', targetCode);
+        }
+        if (targetName) {
+          await this.client.from('suppliers').delete().eq('name', targetName);
+        }
+        if (this._isUUID(idOrName)) {
+          await this.client.from('suppliers').delete().eq('id', idOrName);
+        }
+      } catch (err) {
+        console.warn('Supabase deleteSupplier error:', err);
+      }
+    }
     return list;
   }
 
   // ==================== SHIPMENTS ====================
   async getShipments() {
     if (this.isLive && this.client) {
-      const { data } = await this.client.from('shipments').select('*').order('created_at', { ascending: false });
-      if (data) return data;
+      try {
+        const { data, error } = await this.client.from('shipments').select('*').order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.SHIPMENTS, JSON.stringify(data));
+          return data;
+        }
+      } catch (err) {
+        console.warn('Supabase getShipments error:', err);
+      }
     }
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.SHIPMENTS) || '[]');
   }
 
   async saveShipment(shp) {
-    const list = await this.getShipments();
-    const idx = list.findIndex(s => s.id === shp.id || (shp.id && s.id === shp.id));
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.SHIPMENTS) || '[]');
+    const idx = list.findIndex(s => s.id === shp.id || s.tracking_code === shp.tracking_code);
 
     const clean = {
       id: shp.id || 'shp-' + Date.now(),
@@ -410,7 +495,29 @@ class SupabaseService {
     }
 
     localStorage.setItem(STORAGE_KEYS.SHIPMENTS, JSON.stringify(list));
-    if (this.isLive && this.client) await this.client.from('shipments').upsert([clean]);
+
+    if (this.isLive && this.client) {
+      try {
+        const payload = {
+          tracking_code: clean.tracking_code,
+          supplier_name: clean.supplier_name,
+          carrier: clean.carrier,
+          transport_mode: clean.transport_mode,
+          origin: clean.origin,
+          destination: clean.destination,
+          cargo_summary: clean.cargo_summary,
+          progress_percentage: clean.progress_percentage,
+          eta_date: clean.eta_date,
+          status: clean.status
+        };
+        if (this._isUUID(clean.id)) {
+          payload.id = clean.id;
+        }
+        await this.client.from('shipments').upsert([payload], { onConflict: 'tracking_code' });
+      } catch (err) {
+        console.warn('Supabase saveShipment error:', err);
+      }
+    }
     return clean;
   }
 
@@ -418,25 +525,47 @@ class SupabaseService {
     return this.saveShipment(shp);
   }
 
-  async deleteShipment(id) {
-    let list = await this.getShipments();
-    list = list.filter(s => s.id !== id && s.tracking_code !== id);
+  async deleteShipment(idOrCode) {
+    let list = JSON.parse(localStorage.getItem(STORAGE_KEYS.SHIPMENTS) || '[]');
+    const target = list.find(s => s.id === idOrCode || s.tracking_code === idOrCode);
+    const targetCode = target ? target.tracking_code : idOrCode;
+
+    list = list.filter(s => s.id !== idOrCode && s.tracking_code !== idOrCode && (targetCode ? s.tracking_code !== targetCode : true));
     localStorage.setItem(STORAGE_KEYS.SHIPMENTS, JSON.stringify(list));
-    if (this.isLive && this.client) await this.client.from('shipments').delete().eq('id', id);
+
+    if (this.isLive && this.client) {
+      try {
+        if (targetCode) {
+          await this.client.from('shipments').delete().eq('tracking_code', targetCode);
+        }
+        if (this._isUUID(idOrCode)) {
+          await this.client.from('shipments').delete().eq('id', idOrCode);
+        }
+      } catch (err) {
+        console.warn('Supabase deleteShipment error:', err);
+      }
+    }
     return list;
   }
 
   // ==================== REQUESTS ====================
   async getRequests() {
     if (this.isLive && this.client) {
-      const { data } = await this.client.from('requests').select('*').order('created_at', { ascending: false });
-      if (data) return data;
+      try {
+        const { data, error } = await this.client.from('requests').select('*').order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(data));
+          return data;
+        }
+      } catch (err) {
+        console.warn('Supabase getRequests error:', err);
+      }
     }
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
   }
 
   async addRequest(req) {
-    const list = await this.getRequests();
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
     const clean = {
       id: 'req-' + Date.now(),
       request_no: 'TR-HSG-' + Math.floor(10000 + Math.random() * 90000),
@@ -456,21 +585,45 @@ class SupabaseService {
     };
     list.unshift(clean);
     localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
-    if (this.isLive && this.client) await this.client.from('requests').insert([clean]);
+
+    if (this.isLive && this.client) {
+      try {
+        await this.client.from('requests').insert([{
+          request_no: clean.request_no,
+          company: clean.company,
+          supplier_name: clean.supplier_name,
+          part_sku: clean.part_sku,
+          part_name: clean.part_name,
+          quantity: clean.quantity,
+          priority: clean.priority,
+          supply_channel: clean.supply_channel,
+          notes: clean.notes
+        }]);
+      } catch (err) {
+        console.warn('Supabase addRequest error:', err);
+      }
+    }
     return clean;
   }
 
   // ==================== REMINDERS ====================
   async getReminders() {
     if (this.isLive && this.client) {
-      const { data } = await this.client.from('reminders').select('*').order('deadline_days', { ascending: true });
-      if (data) return data;
+      try {
+        const { data, error } = await this.client.from('reminders').select('*').order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(data));
+          return data;
+        }
+      } catch (err) {
+        console.warn('Supabase getReminders error:', err);
+      }
     }
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.REMINDERS) || '[]');
   }
 
   async addReminder(rem) {
-    const list = await this.getReminders();
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REMINDERS) || '[]');
     const clean = {
       id: 'rem-' + Date.now(),
       target_type: rem.target_type || 'HSG Çin',
@@ -482,17 +635,47 @@ class SupabaseService {
     };
     list.unshift(clean);
     localStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(list));
-    if (this.isLive && this.client) await this.client.from('reminders').insert([clean]);
+
+    if (this.isLive && this.client) {
+      try {
+        await this.client.from('reminders').insert([{
+          target_type: clean.target_type,
+          supplier_name: clean.supplier_name,
+          reference_id: clean.reference_id,
+          title: clean.title,
+          deadline_days: clean.days_left,
+          priority: clean.priority
+        }]);
+      } catch (err) {
+        console.warn('Supabase addReminder error:', err);
+      }
+    }
     return clean;
   }
 
-  async completeReminder(id) {
-    let list = await this.getReminders();
-    list = list.filter(r => r.id !== id);
+  async completeReminder(idOrRef) {
+    let list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REMINDERS) || '[]');
+    const target = list.find(r => r.id === idOrRef || r.reference_id === idOrRef);
+    const refId = target ? target.reference_id : null;
+
+    list = list.filter(r => r.id !== idOrRef && r.reference_id !== idOrRef);
     localStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(list));
-    if (this.isLive && this.client) await this.client.from('reminders').delete().eq('id', id);
+
+    if (this.isLive && this.client) {
+      try {
+        if (refId) {
+          await this.client.from('reminders').delete().eq('reference_id', refId);
+        }
+        if (this._isUUID(idOrRef)) {
+          await this.client.from('reminders').delete().eq('id', idOrRef);
+        }
+      } catch (err) {
+        console.warn('Supabase completeReminder error:', err);
+      }
+    }
     return list;
   }
 }
 
 window.dbService = new SupabaseService();
+
