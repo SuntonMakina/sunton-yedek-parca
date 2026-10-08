@@ -1327,6 +1327,27 @@ async function handleSimpleRequestSubmit(e) {
   const proforma_no = document.getElementById('formReqProformaNo').value.trim();
   const proforma_amount = document.getElementById('formReqProformaAmount').value.trim();
 
+  // 2. adım veya sonraki adımlarda proforma yükleme zorunluluğu
+  if (stage_step >= 2 && !proforma_file) {
+    alert('⚠️ 2. Adım veya sonraki aşamalarda talep oluşturabilmek için Tedarikçi Proforma Faturası yüklenmesi zorunludur!\n\nLütfen formu kaydetmeden önce "2. Adım: Tedarikçi Proforma Faturası" alanından PDF veya görsel proforma yükleyiniz.');
+    const section = document.getElementById('formReqProformaSection');
+    if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  // Kayıt onay sorusu
+  const confirmMsg = `Yeni parça talebini oluşturmak ve kaydetmek istediğinize emin misiniz?\n\n` +
+    `• Parça: ${part_name}\n` +
+    `• Miktar: ${quantity} Adet\n` +
+    `• Tedarikçi: ${supplier_name}\n` +
+    `• Aşama: ${stage_step}. Adım (${stage_label})\n\n` +
+    `Onaylıyor musunuz?`;
+
+  if (!confirm(confirmMsg)) {
+    showToast('Talep oluşturma işlemi iptal edildi.');
+    return;
+  }
+
   const nowPrecise = formatPreciseDateTime(new Date());
   const initialLogs = [
     {
@@ -1624,24 +1645,32 @@ function renderRequestDetailSteppers() {
   const stageTextEl = document.getElementById('reqDetCurrentStageText');
   if (stageTextEl) stageTextEl.textContent = `Mevcut Aşama: ${currentStageInfo.label}`;
 
+  const hasProforma = !!(currentEditingRequestProforma && currentEditingRequestProforma.file);
+
   container.innerHTML = REQUEST_STAGES.map(stage => {
     const isSelected = stage.step === currentEditingRequestStage;
     const isPassed = stage.step < currentEditingRequestStage;
+    const isLockedWithoutProforma = stage.step > 2 && !hasProforma;
 
     let btnClass = 'bg-white text-slate-700 border-slate-200 hover:border-blue-400 hover:bg-blue-50/50';
     if (isSelected) {
       btnClass = 'bg-blue-600 text-white border-blue-600 shadow-md font-bold ring-2 ring-blue-300';
     } else if (isPassed) {
       btnClass = 'bg-emerald-50 text-emerald-800 border-emerald-300 font-medium';
+    } else if (isLockedWithoutProforma) {
+      btnClass = 'bg-slate-50 text-slate-400 border-slate-200 opacity-75';
     }
 
     return `
-      <button type="button" class="p-2.5 rounded-xl border text-left flex items-start gap-2 transition-all cursor-pointer ${btnClass}" onclick="setRequestDetailStage(${stage.step})">
+      <button type="button" class="p-2.5 rounded-xl border text-left flex items-start gap-2 transition-all cursor-pointer ${btnClass}" onclick="setRequestDetailStage(${stage.step})" title="${isLockedWithoutProforma ? '2. Adımda Proforma Faturası yüklenmeden bu adıma geçilemez' : ''}">
         <span class="material-symbols-outlined text-[18px] shrink-0 mt-0.5 ${isSelected ? 'text-white' : (isPassed ? 'text-emerald-600' : 'text-slate-400')}">
-          ${isPassed ? 'check_circle' : stage.icon}
+          ${isPassed ? 'check_circle' : (isLockedWithoutProforma ? 'lock' : stage.icon)}
         </span>
         <div class="leading-tight">
-          <div class="text-[10px] font-bold uppercase tracking-wider opacity-80">${stage.step}. Adım</div>
+          <div class="text-[10px] font-bold uppercase tracking-wider opacity-80 flex items-center justify-between gap-1">
+            <span>${stage.step}. Adım</span>
+            ${isLockedWithoutProforma ? '<span class="text-[8.5px] text-amber-600 font-bold">🔒 Proforma Gerekli</span>' : ''}
+          </div>
           <div class="text-xs font-semibold mt-0.5">${stage.short}</div>
         </div>
       </button>
@@ -1650,7 +1679,26 @@ function renderRequestDetailSteppers() {
 }
 
 function setRequestDetailStage(step) {
-  currentEditingRequestStage = parseInt(step);
+  const targetStep = parseInt(step);
+  const hasProforma = !!(currentEditingRequestProforma && currentEditingRequestProforma.file);
+
+  // 2. adımda proforma yüklemesi gereksin. Yüklemeden adım atmasın kuralı
+  if (targetStep > 2 && !hasProforma) {
+    showToast('⚠️ 2. Adımda Proforma Faturası yüklenmeden sonraki adımlara geçilemez! Lütfen önce proforma faturasını yükleyiniz.');
+    currentEditingRequestStage = 2;
+    renderRequestDetailSteppers();
+    renderRequestDetailProforma();
+
+    const section = document.getElementById('reqDetProformaSection');
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      section.classList.add('ring-4', 'ring-amber-400');
+      setTimeout(() => section.classList.remove('ring-4', 'ring-amber-400'), 1500);
+    }
+    return;
+  }
+
+  currentEditingRequestStage = targetStep;
   renderRequestDetailSteppers();
   renderRequestDetailProforma(); // Aşama değiştikçe proforma kilitlenme durumunu interaktif güncelle!
 }
@@ -1795,7 +1843,7 @@ function renderRequestDetailProforma() {
       noticeBox.className = 'mb-3 p-2.5 rounded-lg text-xs flex items-center justify-between transition-all bg-amber-100 text-amber-900 border border-amber-300';
     }
     if (noticeText) {
-      noticeText.innerHTML = '<span class="material-symbols-outlined text-[16px] text-amber-700">edit_document</span><span>⭐ <strong>2. AŞAMA AKTİF:</strong> Tedarikçiden gelen Proforma Faturasını (PDF veya görsel) bu adımda yükleyip tutar ve belge no bilgilerini güncelleyebilirsiniz.</span>';
+      noticeText.innerHTML = '<span class="material-symbols-outlined text-[16px] text-amber-700">edit_document</span><span>⭐ <strong>2. AŞAMA AKTİF (ZORUNLU):</strong> Tedarikçiden gelen Proforma Faturasını (PDF veya görsel) bu adımda yükleyip tutar ve belge no bilgilerini kaydediniz.</span>';
     }
     if (noticeBadge) {
       noticeBadge.className = 'text-[10px] font-bold uppercase px-1.5 py-0.5 rounded font-mono bg-amber-200 text-amber-900 border border-amber-300';
@@ -1885,6 +1933,7 @@ async function handleRequestDetailProformaUpload(event) {
   };
 
   renderRequestDetailProforma();
+  renderRequestDetailSteppers(); // Proforma eklendiğinde sonraki adımların kilidi açılsın
   showToast('✓ Proforma belgesi seçildi. "Değişiklikleri Kaydet" butonuna basınız.');
 }
 
@@ -1906,6 +1955,7 @@ function removeRequestDetailProforma() {
   const input = document.getElementById('reqDetProformaUploadInput');
   if (input) input.value = '';
   renderRequestDetailProforma();
+  renderRequestDetailSteppers();
   showToast('Proforma belgesi kaldırıldı. "Değişiklikleri Kaydet" ile onaylayın.');
 }
 
@@ -1930,6 +1980,46 @@ async function saveRequestDetailChanges() {
     currentEditingRequestProforma.amount = proformaAmt;
   }
 
+  const hasProf = !!(currentEditingRequestProforma && currentEditingRequestProforma.file);
+
+  // KURAL 1: 2. Adımda proforma yüklenmesi zorunludur! Yüklemeden adım atılmasın ve kaydedilmesin!
+  if (currentEditingRequestStage === 2 && !hasProf) {
+    alert('⚠️ 2. Adımda (Tedarikçi Onayladı & Hazırlanıyor) Proforma Faturası yüklenmesi zorunludur!\n\nLütfen formu kaydetmeden önce 2. Adım bölümünden proforma faturasını (PDF veya görsel) yükleyiniz.');
+    const profSection = document.getElementById('reqDetProformaSection');
+    if (profSection) {
+      profSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      profSection.classList.add('ring-4', 'ring-amber-400');
+      setTimeout(() => profSection.classList.remove('ring-4', 'ring-amber-400'), 1500);
+    }
+    return;
+  }
+
+  if (currentEditingRequestStage > 2 && !hasProf) {
+    alert(`⚠️ 2. Adımda Proforma Faturası yüklenmeden ${currentEditingRequestStage}. Adıma (${stageInfo.short}) geçilemez ve kaydedilemez!\n\nLütfen önce 2. Adıma dönerek proforma faturasını yükleyiniz.`);
+    currentEditingRequestStage = 2;
+    renderRequestDetailSteppers();
+    renderRequestDetailProforma();
+    return;
+  }
+
+  // KURAL 2: Değişikliği kaydet dediğinde emin misin diye sorulsun!
+  const partTitle = existing ? existing.part_name : (document.getElementById('reqDetPartName')?.textContent || 'Parça');
+  const reqNumber = existing ? existing.request_no : (targetReqNo || '-');
+  const stageTitle = `${currentEditingRequestStage}. Adım (${stageInfo.short})`;
+
+  const confirmMsg = `Talep üzerinde yapılan değişiklikleri kaydetmek istediğinize emin misiniz?\n\n` +
+    `• Talep No: ${reqNumber}\n` +
+    `• Parça: ${partTitle}\n` +
+    `• Seçilen Aşama: ${stageTitle}\n` +
+    `• Proforma Belgesi: ${hasProf ? (currentEditingRequestProforma.name || 'Ekli Belge') + (currentEditingRequestProforma.no ? ' (No: ' + currentEditingRequestProforma.no + ')' : '') : 'Yok'}\n\n` +
+    `Bu işlemi onaylıyor musunuz?`;
+
+  if (!confirm(confirmMsg)) {
+    showToast('Kayıt işlemi iptal edildi.');
+    return;
+  }
+
+  // KURAL 3: Yalnızca onay verildikten sonra işlem kaydedilsin ve loglansın
   const previousStage = existing ? (parseInt(existing.stage_step) || 1) : 1;
   const previousStageInfo = getStageInfo(previousStage);
   const previousProformaFile = existing ? (existing.proforma_file || '') : '';
