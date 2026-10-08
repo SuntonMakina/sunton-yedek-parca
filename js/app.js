@@ -1416,6 +1416,7 @@ async function handleSimpleRequestSubmit(e) {
 
 // ==================== 7. TALEP DETAY MODALI VE DURUM TAKİP SİSTEMİ ====================
 let currentViewingRequestId = '';
+let currentRequestSavedBaseStage = 1; // Kayıtlı mevcut aşama (Geriye dönüşü engellemek için taban adım)
 let currentEditingRequestStage = 1;
 let currentEditingRequestImage = '';
 let currentEditingRequestProforma = {
@@ -1595,7 +1596,8 @@ function openRequestDetailModal(idOrNo) {
   if (!req) return;
 
   currentViewingRequestId = req.id || req.request_no;
-  currentEditingRequestStage = parseInt(req.stage_step) || 1;
+  currentRequestSavedBaseStage = parseInt(req.stage_step) || 1; // Kayıtlı mevcut aşama (Geriye dönüşü engelleyen sınır)
+  currentEditingRequestStage = currentRequestSavedBaseStage;
   currentEditingRequestImage = req.chat_image || '';
   currentEditingRequestProforma = {
     file: req.proforma_file || '',
@@ -1646,32 +1648,51 @@ function renderRequestDetailSteppers() {
   if (stageTextEl) stageTextEl.textContent = `Mevcut Aşama: ${currentStageInfo.label}`;
 
   const hasProforma = !!(currentEditingRequestProforma && currentEditingRequestProforma.file);
+  const baseStep = currentRequestSavedBaseStage || 1;
 
   container.innerHTML = REQUEST_STAGES.map(stage => {
-    const isSelected = stage.step === currentEditingRequestStage;
-    const isPassed = stage.step < currentEditingRequestStage;
+    const isCurrentActive = stage.step === currentEditingRequestStage;
+    const isPastLocked = stage.step < baseStep; // Daha önce tamamlanmış, geriye dönülemez kilitli adım
+    const isPassedInPreview = stage.step < currentEditingRequestStage && stage.step >= baseStep;
     const isLockedWithoutProforma = stage.step > 2 && !hasProforma;
 
-    let btnClass = 'bg-white text-slate-700 border-slate-200 hover:border-blue-400 hover:bg-blue-50/50';
-    if (isSelected) {
-      btnClass = 'bg-blue-600 text-white border-blue-600 shadow-md font-bold ring-2 ring-blue-300';
-    } else if (isPassed) {
-      btnClass = 'bg-emerald-50 text-emerald-800 border-emerald-300 font-medium';
+    let btnClass = 'bg-white text-slate-700 border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 cursor-pointer';
+    let badgeHtml = `<span class="text-[8.5px] text-blue-600 font-bold">İLERİ ➔</span>`;
+    let iconName = stage.icon;
+    let iconColor = 'text-slate-400';
+
+    if (isCurrentActive) {
+      btnClass = 'bg-blue-600 text-white border-blue-600 shadow-md font-bold ring-2 ring-blue-300 cursor-default';
+      badgeHtml = `<span class="text-[8.5px] font-extrabold uppercase px-1.5 py-0.2 bg-white/20 text-white rounded">AKTİF</span>`;
+      iconColor = 'text-white';
+    } else if (isPastLocked) {
+      btnClass = 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed opacity-80';
+      badgeHtml = `<span class="text-[8.5px] font-bold text-slate-600 bg-slate-200 px-1.5 py-0.2 rounded border border-slate-300">🔒 KİLİTLİ</span>`;
+      iconName = 'check_circle';
+      iconColor = 'text-emerald-600';
+    } else if (isPassedInPreview) {
+      btnClass = 'bg-emerald-50 text-emerald-800 border-emerald-300 font-medium cursor-pointer';
+      badgeHtml = `<span class="text-[8.5px] font-bold text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded">✓ GEÇİLDİ</span>`;
+      iconName = 'check_circle';
+      iconColor = 'text-emerald-600';
     } else if (isLockedWithoutProforma) {
-      btnClass = 'bg-slate-50 text-slate-400 border-slate-200 opacity-75';
+      btnClass = 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed opacity-75';
+      badgeHtml = `<span class="text-[8.5px] text-amber-600 font-bold">🔒 Proforma Gerekli</span>`;
+      iconName = 'lock';
+      iconColor = 'text-amber-500';
     }
 
     return `
-      <button type="button" class="p-2.5 rounded-xl border text-left flex items-start gap-2 transition-all cursor-pointer ${btnClass}" onclick="setRequestDetailStage(${stage.step})" title="${isLockedWithoutProforma ? '2. Adımda Proforma Faturası yüklenmeden bu adıma geçilemez' : ''}">
-        <span class="material-symbols-outlined text-[18px] shrink-0 mt-0.5 ${isSelected ? 'text-white' : (isPassed ? 'text-emerald-600' : 'text-slate-400')}">
-          ${isPassed ? 'check_circle' : (isLockedWithoutProforma ? 'lock' : stage.icon)}
+      <button type="button" class="p-2.5 rounded-xl border text-left flex items-start gap-2 transition-all ${btnClass}" onclick="setRequestDetailStage(${stage.step})" title="${isPastLocked ? 'Bu aşama daha önce tamamlanmıştır ve geriye dönülemez (Kilitli)' : (isLockedWithoutProforma ? '2. Adımda Proforma Faturası yüklenmeden bu adıma geçilemez' : '')}">
+        <span class="material-symbols-outlined text-[18px] shrink-0 mt-0.5 ${iconColor}">
+          ${iconName}
         </span>
-        <div class="leading-tight">
-          <div class="text-[10px] font-bold uppercase tracking-wider opacity-80 flex items-center justify-between gap-1">
+        <div class="leading-tight flex-1 min-w-0">
+          <div class="text-[10px] font-bold uppercase tracking-wider flex items-center justify-between gap-1">
             <span>${stage.step}. Adım</span>
-            ${isLockedWithoutProforma ? '<span class="text-[8.5px] text-amber-600 font-bold">🔒 Proforma Gerekli</span>' : ''}
+            ${badgeHtml}
           </div>
-          <div class="text-xs font-semibold mt-0.5">${stage.short}</div>
+          <div class="text-xs font-semibold mt-0.5 truncate">${stage.short}</div>
         </div>
       </button>
     `;
@@ -1680,12 +1701,23 @@ function renderRequestDetailSteppers() {
 
 function setRequestDetailStage(step) {
   const targetStep = parseInt(step);
+  const baseStep = currentRequestSavedBaseStage || 1;
   const hasProforma = !!(currentEditingRequestProforma && currentEditingRequestProforma.file);
 
-  // 2. adımda proforma yüklemesi gereksin. Yüklemeden adım atmasın kuralı
+  // 1. KURAL: Geriye Dönüş Kesinlikle Kilitli! Tamamlanan önceki aşamalara asla dönülemez
+  if (targetStep < baseStep) {
+    showToast(`🔒 Güvenlik Kuralı: ${targetStep}. Adım daha önce tamamlanmıştır ve geriye dönülemez! Süreç yalnızca ileriye doğru ilerleyebilir.`);
+    return;
+  }
+
+  if (targetStep === currentEditingRequestStage) {
+    return;
+  }
+
+  // 2. KURAL: 2. Adımda proforma yüklemesi gereksin. Yüklemeden adım atmasın kuralı
   if (targetStep > 2 && !hasProforma) {
     showToast('⚠️ 2. Adımda Proforma Faturası yüklenmeden sonraki adımlara geçilemez! Lütfen önce proforma faturasını yükleyiniz.');
-    currentEditingRequestStage = 2;
+    currentEditingRequestStage = Math.max(2, baseStep);
     renderRequestDetailSteppers();
     renderRequestDetailProforma();
 
@@ -1971,6 +2003,14 @@ async function saveRequestDetailChanges() {
   const notes = document.getElementById('reqDetNotes').value.trim();
   const stageInfo = getStageInfo(currentEditingRequestStage);
 
+  // GÜVENLİK KONTROLÜ 1: Kayıtlı mevcut adımdan geriye dönülemez!
+  if (currentEditingRequestStage < currentRequestSavedBaseStage) {
+    alert(`🔒 Güvenlik Kuralı: Bu talep daha önce ${currentRequestSavedBaseStage}. Adıma ulaşmıştır. Geriye dönük aşama seçilemez ve kaydedilemez!`);
+    currentEditingRequestStage = currentRequestSavedBaseStage;
+    renderRequestDetailSteppers();
+    return;
+  }
+
   const proformaNo = document.getElementById('reqDetProformaNoInput')?.value.trim() || '';
   const proformaAmt = document.getElementById('reqDetProformaAmountInput')?.value.trim() || '';
 
@@ -1982,7 +2022,7 @@ async function saveRequestDetailChanges() {
 
   const hasProf = !!(currentEditingRequestProforma && currentEditingRequestProforma.file);
 
-  // KURAL 1: 2. Adımda proforma yüklenmesi zorunludur! Yüklemeden adım atılmasın ve kaydedilmesin!
+  // GÜVENLİK KONTROLÜ 2: 2. Adımda proforma yüklenmesi zorunludur! Yüklemeden adım atılmasın ve kaydedilmesin!
   if (currentEditingRequestStage === 2 && !hasProf) {
     alert('⚠️ 2. Adımda (Tedarikçi Onayladı & Hazırlanıyor) Proforma Faturası yüklenmesi zorunludur!\n\nLütfen formu kaydetmeden önce 2. Adım bölümünden proforma faturasını (PDF veya görsel) yükleyiniz.');
     const profSection = document.getElementById('reqDetProformaSection');
@@ -1995,14 +2035,14 @@ async function saveRequestDetailChanges() {
   }
 
   if (currentEditingRequestStage > 2 && !hasProf) {
-    alert(`⚠️ 2. Adımda Proforma Faturası yüklenmeden ${currentEditingRequestStage}. Adıma (${stageInfo.short}) geçilemez ve kaydedilemez!\n\nLütfen önce 2. Adıma dönerek proforma faturasını yükleyiniz.`);
-    currentEditingRequestStage = 2;
+    alert(`⚠️ 2. Adımda Proforma Faturası yüklenmeden ${currentEditingRequestStage}. Adıma (${stageInfo.short}) geçilemez ve kaydedilemez!\n\nLütfen önce 2. Adımda proforma faturasını yükleyiniz.`);
+    currentEditingRequestStage = Math.max(2, currentRequestSavedBaseStage);
     renderRequestDetailSteppers();
     renderRequestDetailProforma();
     return;
   }
 
-  // KURAL 2: Değişikliği kaydet dediğinde emin misin diye sorulsun!
+  // ONAY PENCERESİ: Değişikliği kaydet dediğinde emin misin diye sorulsun!
   const partTitle = existing ? existing.part_name : (document.getElementById('reqDetPartName')?.textContent || 'Parça');
   const reqNumber = existing ? existing.request_no : (targetReqNo || '-');
   const stageTitle = `${currentEditingRequestStage}. Adım (${stageInfo.short})`;
@@ -2010,7 +2050,7 @@ async function saveRequestDetailChanges() {
   const confirmMsg = `Talep üzerinde yapılan değişiklikleri kaydetmek istediğinize emin misiniz?\n\n` +
     `• Talep No: ${reqNumber}\n` +
     `• Parça: ${partTitle}\n` +
-    `• Seçilen Aşama: ${stageTitle}\n` +
+    `• Yeni Aşama: ${stageTitle}\n` +
     `• Proforma Belgesi: ${hasProf ? (currentEditingRequestProforma.name || 'Ekli Belge') + (currentEditingRequestProforma.no ? ' (No: ' + currentEditingRequestProforma.no + ')' : '') : 'Yok'}\n\n` +
     `Bu işlemi onaylıyor musunuz?`;
 
@@ -2019,7 +2059,7 @@ async function saveRequestDetailChanges() {
     return;
   }
 
-  // KURAL 3: Yalnızca onay verildikten sonra işlem kaydedilsin ve loglansın
+  // Yalnızca onay verildikten sonra işlem kaydedilsin ve loglansın
   const previousStage = existing ? (parseInt(existing.stage_step) || 1) : 1;
   const previousStageInfo = getStageInfo(previousStage);
   const previousProformaFile = existing ? (existing.proforma_file || '') : '';
@@ -2099,6 +2139,9 @@ async function saveRequestDetailChanges() {
       action_desc: `Not detayı: "${notes.length > 90 ? notes.substring(0, 90) + '...' : notes}"`
     });
   }
+
+  // Taban adımı da güncelle (artık geriye dönülemez)
+  currentRequestSavedBaseStage = currentEditingRequestStage;
 
   // Anında bellek durumunu güncelle
   if (existing) {
