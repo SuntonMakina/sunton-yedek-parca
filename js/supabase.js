@@ -135,15 +135,18 @@ const INITIAL_DATA = {
       company: 'Sunton Makine Sanayi A.Ş.',
       supplier_name: 'HSG Shanghai Precision Parts',
       part_sku: 'SKU-9021-HSG',
-      part_name: 'Hidrolik Pompa Valfi',
+      part_name: 'Hidrolik Pompa Valfi (Yüksek Basınç)',
       quantity: 14,
-      priority: 'Normal',
+      priority: 'Kritik',
       supply_channel: 'HSG Çin',
       stage_step: 4,
-      stage_label: 'Kargo / Transit',
-      hsg_status: 'Pekin Gümrük Çıkışı Yapıldı',
-      last_update: '10 dk önce',
-      created_at: new Date(Date.now() - 3600000 * 24).toLocaleDateString('tr-TR')
+      stage_label: 'Uluslararası Sevkiyatta / Yolda',
+      hsg_status: 'Pekin Limanı Gemiye Yüklendi (Maersk)',
+      notes: 'WeChat üzerinden Wang Bey ile teyit edildi. Gemi takip no: MAEU902194',
+      chat_image: '',
+      created_at: new Date(Date.now() - 3600000 * 26).toISOString(),
+      created_at_date: '07 Ekim 2026',
+      created_at_time: '09:30'
     },
     {
       id: 'req-2',
@@ -155,11 +158,14 @@ const INITIAL_DATA = {
       quantity: 28,
       priority: 'Acil',
       supply_channel: 'HSG Çin',
-      stage_step: 2,
-      stage_label: 'HSG İnceleme',
-      hsg_status: 'Mühendislik Onayı Bekliyor',
-      last_update: '35 dk önce',
-      created_at: new Date(Date.now() - 3600000 * 48).toLocaleDateString('tr-TR')
+      stage_step: 3,
+      stage_label: "Çin'den Çıkış Bekliyor",
+      hsg_status: 'Fabrika üretimi tamamladı, Ningbo antrepo çıkışı bekleniyor',
+      notes: 'Fatura ve çeki listesi WhatsApp üzerinden iletildi.',
+      chat_image: '',
+      created_at: new Date(Date.now() - 3600000 * 14).toISOString(),
+      created_at_date: '07 Ekim 2026',
+      created_at_time: '21:15'
     },
     {
       id: 'req-3',
@@ -171,11 +177,14 @@ const INITIAL_DATA = {
       quantity: 45,
       priority: 'Normal',
       supply_channel: 'Yerel Depo',
-      stage_step: 3,
-      stage_label: 'Yanıt & Onay',
-      hsg_status: 'Tedarikçi Onayladı, Hazırlanıyor',
-      last_update: '1 saat önce',
-      created_at: new Date(Date.now() - 3600000 * 72).toLocaleDateString('tr-TR')
+      stage_step: 2,
+      stage_label: 'Tedarikçi Onayladı / Hazırlanıyor',
+      hsg_status: 'Kerem Bey ile görüşüldü, paketleme yapılıyor',
+      notes: 'Yarın kargo takip kodu verilecek.',
+      chat_image: '',
+      created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
+      created_at_date: '08 Ekim 2026',
+      created_at_time: '07:45'
     },
     {
       id: 'req-4',
@@ -187,11 +196,14 @@ const INITIAL_DATA = {
       quantity: 156,
       priority: 'Normal',
       supply_channel: 'Yerel Depo',
-      stage_step: 5,
-      stage_label: 'Teslim Edildi',
-      hsg_status: 'Merkez Depo Teslim Alındı',
-      last_update: 'Dün',
-      created_at: new Date(Date.now() - 3600000 * 96).toLocaleDateString('tr-TR')
+      stage_step: 6,
+      stage_label: 'Merkez Depo Teslim Edildi',
+      hsg_status: 'Merkez Depo Raf No: B-14 teslim alındı',
+      notes: 'İrsaliye imzalandı, stok sistemine aktarıldı.',
+      chat_image: '',
+      created_at: new Date(Date.now() - 3600000 * 72).toISOString(),
+      created_at_date: '05 Ekim 2026',
+      created_at_time: '14:20'
     }
   ],
   reminders: [
@@ -573,31 +585,62 @@ class SupabaseService {
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
   }
 
+  // ==================== REQUESTS ====================
+  async getRequests() {
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client.from('requests').select('*').order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(data));
+          return data;
+        }
+      } catch (err) {
+        console.warn('Supabase getRequests error:', err);
+      }
+    }
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
+  }
+
   async addRequest(req) {
     const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
+    const now = new Date();
+    const trDateFormatted = now.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+    const trTimeFormatted = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
+    const step = parseInt(req.stage_step) || 1;
+    const stageMap = {
+      1: 'Talep Açıldı / Mesaj Bekleniyor',
+      2: 'Tedarikçi Onayladı / Hazırlanıyor',
+      3: "Çin'den Çıkış Bekliyor",
+      4: 'Uluslararası Sevkiyatta / Yolda',
+      5: "Türkiye'de / Gümrükte",
+      6: 'Merkez Depo Teslim Edildi'
+    };
+
     const clean = {
       id: 'req-' + Date.now(),
       request_no: 'TR-HSG-' + Math.floor(10000 + Math.random() * 90000),
-      company: req.company || 'Sunton A.Ş.',
-      supplier_name: req.supplier_name || (req.supply_channel === 'HSG Çin' ? 'HSG Shanghai Precision Parts' : 'Anadolu Hidrolik Makina'),
+      company: req.company || 'Sunton Makine Sanayi A.Ş.',
+      supplier_name: req.supplier_name || 'HSG Shanghai Precision Parts',
       part_sku: req.part_sku || 'SKU-' + Math.floor(1000 + Math.random() * 9000),
       part_name: req.part_name,
       quantity: parseInt(req.quantity) || 1,
       priority: req.priority || 'Normal',
       supply_channel: req.supply_channel || 'HSG Çin',
       notes: req.notes || '',
-      stage_step: 1,
-      stage_label: 'Talep Oluşturuldu',
-      hsg_status: 'Kuyruğa Eklendi',
-      last_update: 'Az önce',
-      created_at: new Date().toLocaleDateString('tr-TR')
+      chat_image: req.chat_image || '',
+      stage_step: step,
+      stage_label: req.stage_label || stageMap[step] || 'Talep Açıldı / Mesaj Bekleniyor',
+      hsg_status: req.hsg_status || 'İşleme Alındı',
+      created_at: now.toISOString(),
+      created_at_date: trDateFormatted,
+      created_at_time: trTimeFormatted
     };
     list.unshift(clean);
     localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
 
     if (this.isLive && this.client) {
       try {
-        await this.client.from('requests').insert([{
+        const payload = {
           request_no: clean.request_no,
           company: clean.company,
           supplier_name: clean.supplier_name,
@@ -606,13 +649,94 @@ class SupabaseService {
           quantity: clean.quantity,
           priority: clean.priority,
           supply_channel: clean.supply_channel,
-          notes: clean.notes
-        }]);
+          notes: clean.notes,
+          chat_image: clean.chat_image,
+          stage_step: clean.stage_step,
+          stage_label: clean.stage_label,
+          status: clean.stage_label,
+          created_at: clean.created_at
+        };
+        await this.client.from('requests').insert([payload]);
       } catch (err) {
         console.warn('Supabase addRequest error:', err);
       }
     }
     return clean;
+  }
+
+  async saveRequest(req) {
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
+    const idx = list.findIndex(r => r.id === req.id || r.request_no === req.request_no);
+    const step = parseInt(req.stage_step) || 1;
+    const stageMap = {
+      1: 'Talep Açıldı / Mesaj Bekleniyor',
+      2: 'Tedarikçi Onayladı / Hazırlanıyor',
+      3: "Çin'den Çıkış Bekliyor",
+      4: 'Uluslararası Sevkiyatta / Yolda',
+      5: "Türkiye'de / Gümrükte",
+      6: 'Merkez Depo Teslim Edildi'
+    };
+
+    if (idx >= 0) {
+      list[idx] = {
+        ...list[idx],
+        ...req,
+        stage_step: step,
+        stage_label: req.stage_label || stageMap[step] || list[idx].stage_label,
+        quantity: parseInt(req.quantity) || list[idx].quantity || 1
+      };
+      localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
+
+      if (this.isLive && this.client) {
+        try {
+          const payload = {
+            company: list[idx].company,
+            supplier_name: list[idx].supplier_name,
+            part_name: list[idx].part_name,
+            quantity: list[idx].quantity,
+            priority: list[idx].priority,
+            supply_channel: list[idx].supply_channel,
+            notes: list[idx].notes,
+            chat_image: list[idx].chat_image,
+            stage_step: list[idx].stage_step,
+            stage_label: list[idx].stage_label,
+            status: list[idx].stage_label
+          };
+          if (this._isUUID(list[idx].id)) {
+            await this.client.from('requests').update(payload).eq('id', list[idx].id);
+          } else {
+            await this.client.from('requests').update(payload).eq('request_no', list[idx].request_no);
+          }
+        } catch (err) {
+          console.warn('Supabase saveRequest error:', err);
+        }
+      }
+      return list[idx];
+    }
+    return null;
+  }
+
+  async deleteRequest(idOrNo) {
+    let list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
+    const target = list.find(r => r.id === idOrNo || r.request_no === idOrNo);
+    const targetNo = target ? target.request_no : idOrNo;
+
+    list = list.filter(r => r.id !== idOrNo && r.request_no !== idOrNo && (targetNo ? r.request_no !== targetNo : true));
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
+
+    if (this.isLive && this.client) {
+      try {
+        if (targetNo) {
+          await this.client.from('requests').delete().eq('request_no', targetNo);
+        }
+        if (this._isUUID(idOrNo)) {
+          await this.client.from('requests').delete().eq('id', idOrNo);
+        }
+      } catch (err) {
+        console.warn('Supabase deleteRequest error:', err);
+      }
+    }
+    return list;
   }
 
   // ==================== REMINDERS ====================

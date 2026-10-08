@@ -102,6 +102,48 @@ function renderCurrentPage() {
   else if (p === 'tedarikciler') renderSuppliers();
 }
 
+// ==================== TALEP AŞAMALARI VE DURUMLARI (6 AŞAMA) ====================
+const REQUEST_STAGES = [
+  { step: 1, label: 'Talep Açıldı / Mesaj Bekleniyor', short: '1. Mesaj Bekleniyor', color: 'bg-slate-100 text-slate-800 border-slate-300', icon: 'chat' },
+  { step: 2, label: 'Tedarikçi Onayladı / Hazırlanıyor', short: '2. Onaylandı & Hazırlanıyor', color: 'bg-amber-50 text-amber-800 border-amber-300', icon: 'inventory' },
+  { step: 3, label: "Çin'den Çıkış Bekliyor", short: "3. Çin Çıkış Bekliyor", color: 'bg-orange-50 text-orange-800 border-orange-300', icon: 'flight_takeoff' },
+  { step: 4, label: 'Uluslararası Sevkiyatta / Yolda', short: '4. Yolda / Sevkiyatta', color: 'bg-blue-50 text-blue-800 border-blue-300', icon: 'directions_boat' },
+  { step: 5, label: "Türkiye'de / Gümrükte", short: "5. TR Gümrükte", color: 'bg-purple-50 text-purple-800 border-purple-300', icon: 'flag' },
+  { step: 6, label: 'Merkez Depo Teslim Edildi', short: '6. Teslim Edildi', color: 'bg-emerald-50 text-emerald-800 border-emerald-300', icon: 'check_circle' }
+];
+
+function getStageInfo(step) {
+  const s = parseInt(step) || 1;
+  return REQUEST_STAGES.find(st => st.step === s) || REQUEST_STAGES[0];
+}
+
+function getStageColor(step) {
+  const s = parseInt(step) || 1;
+  if (s === 1) return 'bg-slate-100 text-slate-700 border border-slate-200';
+  if (s === 2) return 'bg-amber-50 text-amber-800 border border-amber-200';
+  if (s === 3) return 'bg-orange-50 text-orange-800 border border-orange-200';
+  if (s === 4) return 'bg-blue-50 text-blue-800 border border-blue-200';
+  if (s === 5) return 'bg-purple-50 text-purple-800 border border-purple-200';
+  return 'bg-emerald-50 text-emerald-800 border border-emerald-200';
+}
+
+function getRequestCreatedDateTimeFormatted(req) {
+  if (req.created_at_date && req.created_at_time) {
+    return { date: req.created_at_date, time: req.created_at_time };
+  }
+  if (req.created_at) {
+    try {
+      const d = new Date(req.created_at);
+      if (!isNaN(d.getTime())) {
+        const date = d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+        const time = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
+        return { date, time };
+      }
+    } catch (e) {}
+  }
+  return { date: 'Bugün', time: '10:00' };
+}
+
 // Türkiye Saatine (UTC+3) Göre Kalan Gün Hesabı
 function calculateReminderDaysLeft(rem) {
   if (!rem) return 0;
@@ -170,22 +212,41 @@ function renderDashboard() {
     }
   }
 
-  // Son Parça Talepleri
+  // Son Parça Talepleri (Tıklanabilir ve Zengin Kartlar)
   const recentReqEl = document.getElementById('dashRecentRequests');
   if (recentReqEl) {
-    const recent = appState.requests.slice(0, 4);
+    const recent = appState.requests.slice(0, 6);
     if (recent.length === 0) {
-      recentReqEl.innerHTML = '<p class="text-xs text-slate-400 py-3">Henüz talep bulunmuyor.</p>';
+      recentReqEl.innerHTML = '<p class="text-xs text-slate-400 py-4 text-center">Henüz parça talebi bulunmuyor. Sağ üstteki "+ Talep Oluştur" butonuna basarak ekleyebilirsiniz.</p>';
     } else {
-      recentReqEl.innerHTML = recent.map(r => `
-        <div class="py-3 flex items-center justify-between text-sm">
-          <div>
-            <div class="font-medium text-slate-900">${r.part_name}</div>
-            <div class="text-xs text-slate-500">${r.supplier_name || 'Tedarikçi'} • ${r.quantity} Adet (${r.company})</div>
+      recentReqEl.innerHTML = recent.map(r => {
+        const dt = getRequestCreatedDateTimeFormatted(r);
+        const stage = getStageInfo(r.stage_step);
+        const hasImage = !!r.chat_image;
+
+        return `
+          <div class="py-3 px-3 -mx-2 rounded-xl hover:bg-slate-50 transition-all cursor-pointer border border-transparent hover:border-slate-200 group flex items-center justify-between gap-3" onclick="openRequestDetailModal('${r.id || r.request_no}')" title="Detayları, Saati ve Adımları Görüntüle">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 mb-1 flex-wrap">
+                <span class="font-bold text-slate-900 group-hover:text-blue-600 transition-colors text-sm truncate">${r.part_name}</span>
+                <span class="font-mono text-[11px] text-slate-400 font-semibold">${r.request_no}</span>
+                ${hasImage ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200"><span class="material-symbols-outlined text-[13px]">image</span>📷 Sohbet Ekli</span>` : ''}
+              </div>
+              <div class="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+                <span>🏢 <strong class="text-slate-700 font-semibold">${r.supplier_name || 'Tedarikçi'}</strong></span>
+                <span>• ${r.quantity} Adet (${r.company})</span>
+                <span>• 📅 ${dt.date}, ⏰ <strong>${dt.time}</strong></span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-xs px-2.5 py-1 rounded-full font-bold shadow-xs ${getStageColor(r.stage_step)}">
+                ${stage.short || r.stage_label}
+              </span>
+              <span class="material-symbols-outlined text-slate-400 group-hover:text-blue-600 text-[18px]">chevron_right</span>
+            </div>
           </div>
-          <span class="text-xs px-2.5 py-1 rounded-full font-medium ${getStageColor(r.stage_step)}">${r.stage_label || 'Talep'}</span>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
   }
 
@@ -741,20 +802,23 @@ function openSupplierHistoryModal(supplierName) {
   if (requests.length === 0) {
     partsTbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-400">Bu tedarikçiden henüz parça siparişi girilmemiş.</td></tr>';
   } else {
-    partsTbody.innerHTML = requests.map(r => `
-      <tr class="hover:bg-slate-50">
-        <td class="py-2 px-3">
-          <div class="font-medium text-slate-900">${r.part_name}</div>
-          <div class="text-[11px] font-mono text-slate-400">${r.part_sku}</div>
-        </td>
-        <td class="py-2 px-3 font-semibold text-slate-900">${r.quantity} Adet</td>
-        <td class="py-2 px-3 text-slate-600">${r.supply_channel}</td>
-        <td class="py-2 px-3">
-          <span class="px-2 py-0.5 rounded-full text-[10px] font-medium ${getStageColor(r.stage_step)}">${r.stage_label || 'Talep'}</span>
-        </td>
-        <td class="py-2 px-3 text-right text-slate-400">${r.created_at || 'Bugün'}</td>
-      </tr>
-    `).join('');
+    partsTbody.innerHTML = requests.map(r => {
+      const dt = getRequestCreatedDateTimeFormatted(r);
+      return `
+        <tr class="hover:bg-blue-50/60 cursor-pointer transition-colors" onclick="closeSupplierHistoryModal(); openRequestDetailModal('${r.id || r.request_no}')" title="Talep Detayını Aç">
+          <td class="py-2.5 px-3">
+            <div class="font-bold text-slate-900">${r.part_name}</div>
+            <div class="text-[11px] font-mono text-slate-500">${r.part_sku} • ${r.request_no}</div>
+          </td>
+          <td class="py-2.5 px-3 font-semibold text-slate-900">${r.quantity} Adet</td>
+          <td class="py-2.5 px-3 text-slate-600">${r.supply_channel}</td>
+          <td class="py-2.5 px-3">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${getStageColor(r.stage_step)}">${getStageInfo(r.stage_step).short}</span>
+          </td>
+          <td class="py-2.5 px-3 text-right text-slate-500 text-[11px]">${dt.date} ${dt.time}</td>
+        </tr>
+      `;
+    }).join('');
   }
 
   // 4. Bağlı Sevkiyatlar Doldur
@@ -924,12 +988,37 @@ async function deleteSupplier(id) {
   }
 }
 
-function deleteCurrentSupplier() {
-  const id = document.getElementById('modalSupId').value;
-  if (id) deleteSupplier(id);
+// ==================== 6. YENİ TALEP & GÖRSEL YÜKLEME ====================
+function handleRequestImageUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert('Lütfen 5MB\'dan küçük bir görsel seçin.');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64 = e.target.result;
+    document.getElementById('formReqChatImageBase64').value = base64;
+    document.getElementById('formReqImagePreview').src = base64;
+    document.getElementById('formReqImageFileName').textContent = file.name;
+    document.getElementById('formReqUploadPrompt').classList.add('hidden');
+    document.getElementById('formReqImagePreviewContainer').classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
 }
 
-// ==================== 6. YENİ TALEP ====================
+function removeRequestUploadedImage() {
+  const fileInput = document.getElementById('formReqChatImageFile');
+  if (fileInput) fileInput.value = '';
+  document.getElementById('formReqChatImageBase64').value = '';
+  document.getElementById('formReqImagePreview').src = '';
+  document.getElementById('formReqUploadPrompt').classList.remove('hidden');
+  document.getElementById('formReqImagePreviewContainer').classList.add('hidden');
+}
+
 async function handleSimpleRequestSubmit(e) {
   e.preventDefault();
   const company = document.getElementById('formReqCompany').value;
@@ -937,8 +1026,11 @@ async function handleSimpleRequestSubmit(e) {
   const part_name = document.getElementById('formReqPart').value.trim();
   const quantity = parseInt(document.getElementById('formReqQty').value) || 1;
   const priority = document.getElementById('formReqPriority').value;
+  const stage_step = parseInt(document.getElementById('formReqStage').value) || 1;
+  const stage_label = getStageInfo(stage_step).label;
   const supply_channel = document.querySelector('input[name="formReqChannel"]:checked')?.value || 'HSG Çin';
   const notes = document.getElementById('formReqNotes').value.trim();
+  const chat_image = document.getElementById('formReqChatImageBase64').value || '';
 
   const created = await window.dbService.addRequest({
     company,
@@ -948,11 +1040,194 @@ async function handleSimpleRequestSubmit(e) {
     quantity,
     priority,
     supply_channel,
-    notes
+    stage_step,
+    stage_label,
+    notes,
+    chat_image
   });
 
   document.getElementById('simpleRequestForm').reset();
+  removeRequestUploadedImage();
   await loadAllData();
   showToast(`Talep oluşturuldu (${created.request_no} - ${supplier_name})`);
-  setTimeout(() => navigateTo('kontrol-paneli'), 600);
+  setTimeout(() => navigateTo('kontrol-paneli'), 500);
+}
+
+// ==================== 7. TALEP DETAY MODALI VE DURUM TAKİP SİSTEMİ ====================
+let currentViewingRequestId = '';
+let currentEditingRequestStage = 1;
+let currentEditingRequestImage = '';
+
+function openRequestDetailModal(idOrNo) {
+  const req = appState.requests.find(r => r.id === idOrNo || r.request_no === idOrNo);
+  if (!req) return;
+
+  currentViewingRequestId = req.id || req.request_no;
+  currentEditingRequestStage = parseInt(req.stage_step) || 1;
+  currentEditingRequestImage = req.chat_image || '';
+
+  const dt = getRequestCreatedDateTimeFormatted(req);
+
+  document.getElementById('reqDetId').value = req.id || req.request_no;
+  document.getElementById('reqDetNo').textContent = req.request_no;
+  document.getElementById('reqDetCompany').textContent = req.company || 'Sunton Makine';
+  document.getElementById('reqDetDate').textContent = dt.date;
+  document.getElementById('reqDetTime').textContent = dt.time;
+  document.getElementById('reqDetChannel').textContent = req.supply_channel || 'HSG Çin';
+  
+  const priorityBadge = document.getElementById('reqDetPriorityBadge');
+  priorityBadge.textContent = req.priority || 'Normal';
+  priorityBadge.className = `text-xs px-2.5 py-0.5 rounded-full font-bold ${
+    req.priority === 'Kritik' ? 'bg-red-100 text-red-700 border border-red-200' :
+    (req.priority === 'Acil' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-blue-50 text-blue-700 border border-blue-200')
+  }`;
+
+  document.getElementById('reqDetPartName').textContent = req.part_name;
+  document.getElementById('reqDetSupplier').textContent = req.supplier_name;
+  document.getElementById('reqDetSku').textContent = req.part_sku;
+  document.getElementById('reqDetQty').textContent = `${req.quantity} Adet`;
+  document.getElementById('reqDetNotes').value = req.notes || '';
+
+  renderRequestDetailSteppers();
+  renderRequestDetailImage();
+
+  document.getElementById('requestDetailModal').classList.remove('hidden');
+}
+
+function renderRequestDetailSteppers() {
+  const container = document.getElementById('reqDetStepperContainer');
+  if (!container) return;
+
+  const currentStageInfo = getStageInfo(currentEditingRequestStage);
+  const stageTextEl = document.getElementById('reqDetCurrentStageText');
+  if (stageTextEl) stageTextEl.textContent = `Mevcut Aşama: ${currentStageInfo.label}`;
+
+  container.innerHTML = REQUEST_STAGES.map(stage => {
+    const isSelected = stage.step === currentEditingRequestStage;
+    const isPassed = stage.step < currentEditingRequestStage;
+
+    let btnClass = 'bg-white text-slate-700 border-slate-200 hover:border-blue-400 hover:bg-blue-50/50';
+    if (isSelected) {
+      btnClass = 'bg-blue-600 text-white border-blue-600 shadow-md font-bold ring-2 ring-blue-300';
+    } else if (isPassed) {
+      btnClass = 'bg-emerald-50 text-emerald-800 border-emerald-300 font-medium';
+    }
+
+    return `
+      <button type="button" class="p-2.5 rounded-xl border text-left flex items-start gap-2 transition-all cursor-pointer ${btnClass}" onclick="setRequestDetailStage(${stage.step})">
+        <span class="material-symbols-outlined text-[18px] shrink-0 mt-0.5 ${isSelected ? 'text-white' : (isPassed ? 'text-emerald-600' : 'text-slate-400')}">
+          ${isPassed ? 'check_circle' : stage.icon}
+        </span>
+        <div class="leading-tight">
+          <div class="text-[10px] font-bold uppercase tracking-wider opacity-80">${stage.step}. Adım</div>
+          <div class="text-xs font-semibold mt-0.5">${stage.short}</div>
+        </div>
+      </button>
+    `;
+  }).join('');
+}
+
+function setRequestDetailStage(step) {
+  currentEditingRequestStage = parseInt(step);
+  renderRequestDetailSteppers();
+}
+
+function renderRequestDetailImage() {
+  const container = document.getElementById('reqDetImageContainer');
+  const thumb = document.getElementById('reqDetImageThumb');
+  const statusEl = document.getElementById('reqDetImageStatus');
+  const btnRemove = document.getElementById('btnReqDetRemoveImg');
+
+  if (currentEditingRequestImage) {
+    thumb.src = currentEditingRequestImage;
+    container.classList.remove('hidden');
+    statusEl.textContent = '✓ 1 Görsel Ekli';
+    statusEl.className = 'text-[11px] text-emerald-600 font-bold';
+    btnRemove.classList.remove('hidden');
+  } else {
+    thumb.src = '';
+    container.classList.add('hidden');
+    statusEl.textContent = 'Ekli Görsel Yok';
+    statusEl.className = 'text-[11px] text-slate-400';
+    btnRemove.classList.add('hidden');
+  }
+}
+
+function handleRequestDetailImageUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert('Lütfen 5MB\'dan küçük bir görsel seçin.');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    currentEditingRequestImage = e.target.result;
+    renderRequestDetailImage();
+    showToast('Yeni görsel seçildi. "Değişiklikleri Kaydet" butonuna basınız.');
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeRequestDetailImage() {
+  currentEditingRequestImage = '';
+  const input = document.getElementById('reqDetUploadInput');
+  if (input) input.value = '';
+  renderRequestDetailImage();
+  showToast('Görsel kaldırıldı. "Değişiklikleri Kaydet" ile onaylayın.');
+}
+
+function closeRequestDetailModal() {
+  document.getElementById('requestDetailModal').classList.add('hidden');
+}
+
+async function saveRequestDetailChanges() {
+  const idOrNo = document.getElementById('reqDetId').value;
+  const notes = document.getElementById('reqDetNotes').value.trim();
+  const stageInfo = getStageInfo(currentEditingRequestStage);
+
+  closeRequestDetailModal();
+
+  await window.dbService.saveRequest({
+    id: idOrNo,
+    request_no: idOrNo,
+    stage_step: currentEditingRequestStage,
+    stage_label: stageInfo.label,
+    notes: notes,
+    chat_image: currentEditingRequestImage
+  });
+
+  await loadAllData();
+  renderDashboard();
+  showToast(`Talep durumu "${stageInfo.label}" olarak güncellendi.`);
+}
+
+async function deleteCurrentRequest() {
+  const idOrNo = document.getElementById('reqDetId').value;
+  const req = appState.requests.find(r => r.id === idOrNo || r.request_no === idOrNo);
+  const title = req ? req.part_name : idOrNo;
+
+  if (confirm(`"${title}" parça talebini silmek istediğinize emin misiniz?`)) {
+    closeRequestDetailModal();
+    appState.requests = appState.requests.filter(r => r.id !== idOrNo && r.request_no !== idOrNo);
+    renderDashboard();
+
+    await window.dbService.deleteRequest(idOrNo);
+    await loadAllData();
+    renderDashboard();
+    showToast(`Talep başarıyla silindi.`);
+  }
+}
+
+// ==================== 8. RESİM BÜYÜTME (LIGHTBOX) ====================
+function openImageLightbox(src) {
+  if (!src) return;
+  document.getElementById('lightboxImage').src = src;
+  document.getElementById('imageLightboxModal').classList.remove('hidden');
+}
+
+function closeImageLightbox() {
+  document.getElementById('imageLightboxModal').classList.add('hidden');
 }
