@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Sunton & HSG | Yedek Parça Portalı</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts & Material Symbols -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+  <!-- Custom Minimalist Styles -->
+  <link rel="stylesheet" href="css/styles.css"/>
+
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-['Inter',sans-serif] min-h-screen flex flex-col">
+
+  <!-- ==================== 1. ÜST GEZİNME ÇUBUĞU (TOP NAVBAR) ==================== -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
+      
+      <!-- Logo -->
+      <div class="flex items-center gap-3 cursor-pointer" onclick="navigateTo('kontrol-paneli')">
+        <div class="w-9 h-9 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold">
+          <span class="material-symbols-outlined text-[20px]">precision_manufacturing</span>
+        </div>
+        <div>
+          <span class="font-bold text-slate-900 text-base tracking-tight">SUNTON & HSG</span>
+          <span class="text-xs text-slate-500 block -mt-0.5">Yedek Parça Portalı</span>
+        </div>
+      </div>
+
+      <!-- Menü Linkleri -->
+      <nav class="hidden md:flex items-center gap-1">
+        <button class="nav-item px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors" data-path="kontrol-paneli" onclick="navigateTo('kontrol-paneli')">Genel Bakış</button>
+        <button class="nav-item px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors" data-path="envanter" onclick="navigateTo('envanter')">Envanter</button>
+        <button class="nav-item px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors" data-path="sevkiyatlar" onclick="navigateTo('sevkiyatlar')">Sevkiyatlar</button>
+        <button class="nav-item px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors" data-path="mesaj-ve-hatirlaticilar" onclick="navigateTo('mesaj-ve-hatirlaticilar')">Hatırlatıcılar</button>
+        <button class="nav-item px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors" data-path="tedarikciler" onclick="navigateTo('tedarikciler')">Tedarikçiler</button>
+      </nav>
+
+      <!-- Sağ Aksiyonlar -->
+      <div class="flex items-center gap-2">
+        <button class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer" onclick="navigateTo('yeni-talep')">
+          <span class="material-symbols-outlined text-[18px]">add</span>
+          <span>Yeni Talep</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Mobil Gezinme Barı -->
+    <div class="md:hidden flex items-center overflow-x-auto px-4 py-2 border-t border-slate-100 gap-1 text-xs">
+      <button class="nav-item px-2.5 py-1 rounded text-slate-600" data-path="kontrol-paneli" onclick="navigateTo('kontrol-paneli')">Özet</button>
+      <button class="nav-item px-2.5 py-1 rounded text-slate-600" data-path="envanter" onclick="navigateTo('envanter')">Envanter</button>
+      <button class="nav-item px-2.5 py-1 rounded text-slate-600" data-path="sevkiyatlar" onclick="navigateTo('sevkiyatlar')">Sevkiyat</button>
+      <button class="nav-item px-2.5 py-1 rounded text-slate-600" data-path="mesaj-ve-hatirlaticilar" onclick="navigateTo('mesaj-ve-hatirlaticilar')">Hatırlatıcı</button>
+      <button class="nav-item px-2.5 py-1 rounded text-slate-600" data-path="tedarikciler" onclick="navigateTo('tedarikciler')">Tedarikçiler</button>
+    </div>
+  </header>
+
+  <!-- ==================== 2. ANA İÇERİK ALANI ==================== -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- SAYFA 1: GENEL BAKIŞ (KONTROL PANELİ)                              -->
+    <!-- ------------------------------------------------------------------ -->
+    <section id="view-kontrol-paneli" class="page-view active">
+      <!-- 4 Temel Metrik Kartı -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-colors" onclick="navigateTo('envanter')">
+          <span class="text-xs text-slate-500 uppercase font-medium">Toplam Stok</span>
+          <div class="text-2xl font-bold text-slate-900 mt-1" id="dashTotalStock">0</div>
+          <span class="text-xs text-slate-400 mt-1 block">Tüm depolardaki parçalar</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-blue-300 transition-colors" onclick="navigateTo('sevkiyatlar')">
+          <span class="text-xs text-slate-500 uppercase font-medium">Aktif Sevkiyatlar</span>
+          <div class="text-2xl font-bold text-blue-600 mt-1" id="dashActiveShipments">0</div>
+          <span class="text-xs text-slate-400 mt-1 block">Tedarikçi yoldaki yükler</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors" onclick="navigateTo('tedarikciler')">
+          <span class="text-xs text-slate-500 uppercase font-medium">Tedarikçiler</span>
+          <div class="text-2xl font-bold text-indigo-600 mt-1" id="dashSuppliersCount">0</div>
+          <span class="text-xs text-slate-400 mt-1 block">Kayıtlı aktif firma</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-red-300 transition-colors" onclick="navigateTo('mesaj-ve-hatirlaticilar')">
+          <span class="text-xs text-slate-500 uppercase font-medium">Hatırlatıcılar</span>
+          <div class="text-2xl font-bold text-red-600 mt-1" id="dashRemindersCount">0</div>
+          <span class="text-xs text-slate-400 mt-1 block">Acil yanıt bekleyen</span>
+        </div>
+      </div>
+
+      <!-- 2 Kolonlu Sade Özet Tablosu -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Son Parça Talepleri -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-slate-900">Son Parça Talepleri</h3>
+            <button class="text-xs text-blue-600 hover:underline cursor-pointer" onclick="navigateTo('yeni-talep')">+ Talep Oluştur</button>
+          </div>
+          <div class="divide-y divide-slate-100" id="dashRecentRequests">
+            <!-- JS ile dinamik dolar -->
+          </div>
+        </div>
+
+        <!-- Bekleyen Hatırlatıcılar -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-slate-900">Bekleyen Hatırlatıcılar</h3>
+            <button class="text-xs text-blue-600 hover:underline cursor-pointer" onclick="navigateTo('mesaj-ve-hatirlaticilar')">Tümünü Gör</button>
+          </div>
+          <div class="divide-y divide-slate-100" id="dashRecentReminders">
+            <!-- JS ile dinamik dolar -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- SAYFA 2: ENVANTER (STOK LİSTESİ)                                   -->
+    <!-- ------------------------------------------------------------------ -->
+    <section id="view-envanter" class="page-view">
+      <!-- Üst Araç Çubuğu -->
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
+        <div class="flex items-center gap-2 flex-1 max-w-md">
+          <input class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-600" id="invSearchInput" onkeyup="filterInventory()" placeholder="SKU veya Parça Adı ara..." type="text"/>
+          <select class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none cursor-pointer" id="invDepotFilter" onchange="filterInventory()">
+            <option value="">Tüm Depolar</option>
+            <option value="Çin HSG Hub">Çin HSG Hub</option>
+            <option value="İstanbul Ana">İstanbul Ana</option>
+            <option value="Ankara Depo">Ankara Depo</option>
+          </select>
+        </div>
+
+        <button class="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer" onclick="openAddInventoryModal()">
+          <span class="material-symbols-outlined text-[18px]">add</span>
+          <span>Parça Ekle</span>
+        </button>
+      </div>
+
+      <!-- Sade Tablo -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+        <table class="w-full text-left text-sm border-collapse">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium text-xs">
+              <th class="py-3 px-4">SKU</th>
+              <th class="py-3 px-4">PARÇA ADI</th>
+              <th class="py-3 px-4">DEPO</th>
+              <th class="py-3 px-4">STOK ADEDİ</th>
+              <th class="py-3 px-4">DURUM</th>
+              <th class="py-3 px-4 text-right">İŞLEM</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100" id="inventoryTableBody">
+            <!-- JS ile dinamik dolar -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- SAYFA 3: SEVKİYATLAR                                               -->
+    <!-- ------------------------------------------------------------------ -->
+    <section id="view-sevkiyatlar" class="page-view">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900">Aktif Sevkiyatlar</h2>
+          <p class="text-xs text-slate-500">Tedarikçi ve rota bazlı yoldaki yedek parça yükleri</p>
+        </div>
+        <button class="bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors cursor-pointer" onclick="openAddShipmentModal()">
+          <span class="material-symbols-outlined text-[18px]">add</span>
+          <span>Sevkiyat Ekle</span>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="shipmentsGrid">
+        <!-- JS ile dinamik dolar -->
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- SAYFA 4: MESAJ VE HATIRLATICILAR                                   -->
+    <!-- ------------------------------------------------------------------ -->
+    <section id="view-mesaj-ve-hatirlaticilar" class="page-view">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900">Bekleyen Mesaj ve Hatırlatıcılar</h2>
+          <p class="text-xs text-slate-500">Tedarikçi ve departmanlardan beklenen kritik yanıt süreleri</p>
+        </div>
+        <button class="bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors cursor-pointer" onclick="openAddReminderModal()">
+          <span class="material-symbols-outlined text-[18px]">add</span>
+          <span>Hatırlatıcı Ekle</span>
+        </button>
+      </div>
+
+      <div class="space-y-3" id="remindersListContainer">
+        <!-- JS ile dinamik dolar -->
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- SAYFA 5: TEDARİKÇİLER                                              -->
+    <!-- ------------------------------------------------------------------ -->
+    <section id="view-tedarikciler" class="page-view">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900">Tedarikçi ve Bayi Listesi</h2>
+          <p class="text-xs text-slate-500">Firmaya tıklayarak <strong>tüm alınan parçaları, sevkiyatları ve işlem geçmişini</strong> görebilirsiniz.</p>
+        </div>
+        <button class="bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors cursor-pointer" onclick="openAddSupplierModal()">
+          <span class="material-symbols-outlined text-[18px]">add</span>
+          <span>Firma Ekle</span>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="suppliersGrid">
+        <!-- JS ile dinamik dolar -->
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- SAYFA 6: YENİ TALEP GİRİŞİ (BASİT FORM)                            -->
+    <!-- ------------------------------------------------------------------ -->
+    <section id="view-yeni-talep" class="page-view">
+      <div class="max-w-xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="text-lg font-bold text-slate-900 mb-1">Yeni Yedek Parça Talebi</h2>
+        <p class="text-xs text-slate-500 mb-5">Tedarikçi ve parça seçerek hızlı sipariş talebi oluşturun.</p>
+
+        <form class="space-y-4" id="simpleRequestForm" onsubmit="handleSimpleRequestSubmit(event)">
+          <!-- Şirket -->
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Operasyon Birimi</label>
+            <select class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-600 cursor-pointer" id="formReqCompany">
+              <option value="Sunton Makine Sanayi A.Ş.">Sunton Makine Sanayi A.Ş.</option>
+              <option value="HSG Global Logistics Ltd.">HSG Global Logistics Ltd.</option>
+              <option value="Ankara Montaj Hattı #3">Ankara Montaj Hattı #3</option>
+              <option value="Bursa Yedek Parça Depo">Bursa Yedek Parça Depo</option>
+            </select>
+          </div>
+
+          <!-- Tedarikçi Seçimi -->
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Tedarikçi Firma</label>
+            <select class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-600 cursor-pointer" id="formReqSupplier">
+              <!-- JS ile dinamik doldurulur -->
+            </select>
+          </div>
+
+          <!-- Parça Adı / SKU -->
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Parça Adı veya SKU Kodu</label>
+            <input class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-600" id="formReqPart" placeholder="örn: Hidrolik Pompa Valfi (SKU-9021-HSG)" required="" type="text"/>
+          </div>
+
+          <!-- Miktar & Öncelik -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Adet</label>
+              <input class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-600" id="formReqQty" min="1" required="" type="number" value="1"/>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Öncelik</label>
+              <select class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-600 cursor-pointer" id="formReqPriority">
+                <option value="Normal">Normal</option>
+                <option value="Acil">Acil</option>
+                <option value="Kritik">Kritik</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Tedarik Kanalı -->
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Tedarik Kanalı</label>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100">
+                <input checked="" class="accent-blue-600" name="formReqChannel" type="radio" value="HSG Çin"/>
+                <span class="text-xs font-medium text-slate-800">HSG Çin Fabrika (14-21 Gün)</span>
+              </label>
+              <label class="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100">
+                <input class="accent-blue-600" name="formReqChannel" type="radio" value="Yerel Depo"/>
+                <span class="text-xs font-medium text-slate-800">Yerel Depo (1-3 Gün)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Notlar -->
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Açıklama / Not</label>
+            <textarea class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-600 resize-none" id="formReqNotes" placeholder="Gerekçe veya sevkiyat talimatları..." rows="2"></textarea>
+          </div>
+
+          <!-- Buton -->
+          <div class="pt-2">
+            <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors cursor-pointer shadow-sm" type="submit">
+              Talebi Oluştur ve Gönder
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== MODAL 1: PARÇA EKLE / DÜZENLE ==================== -->
+  <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4" id="inventoryModal">
+    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-5 border border-slate-200 relative">
+      <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+        <h3 class="font-bold text-slate-900 text-base" id="invModalTitle">Parça Ekle</h3>
+        <button class="text-slate-400 hover:text-slate-700 cursor-pointer" onclick="closeInventoryModal()">✕</button>
+      </div>
+      <form class="space-y-3" onsubmit="handleInventorySubmit(event)">
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">SKU Kodu</label>
+          <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:bg-white" id="modalInvSku" placeholder="örn: SKU-9021-HSG" required="" type="text"/>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">Parça Adı</label>
+          <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:bg-white" id="modalInvName" placeholder="örn: Hidrolik Pompa Valfi" required="" type="text"/>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Depo</label>
+            <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" id="modalInvDepot">
+              <option value="Çin HSG Hub">Çin HSG Hub</option>
+              <option value="İstanbul Ana">İstanbul Ana</option>
+              <option value="Ankara Depo">Ankara Depo</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Mevcut Adet</label>
+            <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:bg-white" id="modalInvQty" min="0" required="" type="number" value="10"/>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 mt-2">
+          <button class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium cursor-pointer" onclick="closeInventoryModal()" type="button">İptal</button>
+          <button class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium cursor-pointer" type="submit">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 2: SEVKİYAT EKLE / DÜZENLE ==================== -->
+  <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4" id="shipmentModal">
+    <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-5 border border-slate-200 relative max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+        <h3 class="font-bold text-slate-900 text-base" id="shipmentModalTitle">Yeni Sevkiyat Ekle</h3>
+        <button class="text-slate-400 hover:text-slate-700 cursor-pointer" onclick="closeShipmentModal()">✕</button>
+      </div>
+      <form class="space-y-3" onsubmit="handleShipmentSubmit(event)">
+        <input type="hidden" id="modalShipId" value=""/>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Takip / Sevk Kodu</label>
+            <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:bg-white" id="modalShipTrackingCode" placeholder="örn: TR-SHP-8890" type="text"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Tedarikçi / Gönderici</label>
+            <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none cursor-pointer focus:bg-white" id="modalShipSupplier">
+              <!-- JS ile dinamik doldurulur -->
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Taşıyıcı</label>
+            <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:bg-white" id="modalShipCarrier">
+              <option value="Maersk Line">Maersk Line</option>
+              <option value="DHL Global">DHL Global</option>
+              <option value="Kuehne+Nagel">Kuehne+Nagel</option>
+              <option value="Turkish Cargo">Turkish Cargo</option>
+              <option value="MSC Line">MSC Line</option>
+              <option value="Arkas Lojistik">Arkas Lojistik</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Taşıma Türü</label>
+            <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:bg-white" id="modalShipMode">
+              <option value="Denizyolu">Denizyolu</option>
+              <option value="Havayolu">Havayolu</option>
+              <option value="Karayolu">Karayolu</option>
+              <option value="Demiryolu">Demiryolu</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Çıkış Noktası</label>
+            <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:bg-white" id="modalShipOrigin" placeholder="örn: Şanghay" required="" type="text" value="Şanghay"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Varış Noktası</label>
+            <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:bg-white" id="modalShipDestination" placeholder="örn: İstanbul (Ambarlı)" required="" type="text" value="İstanbul"/>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">Yük / Parça Özeti</label>
+          <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:bg-white" id="modalShipCargo" placeholder="örn: 42 Palet Hidrolik Valf Parçaları" required="" type="text"/>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Tahmini Varış Süresi (ETA)</label>
+            <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none font-medium text-blue-700 focus:bg-white" id="modalShipEta" placeholder="örn: 5 Gün Kaldı (28 Ekim)" required="" type="text" value="7 Gün Sonra"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Sevkiyat Durumu</label>
+            <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none font-medium focus:bg-white" id="modalShipStatus">
+              <option value="Hazırlanıyor">Hazırlanıyor</option>
+              <option value="Yolda">Yolda</option>
+              <option value="Gümrükte">Gümrükte</option>
+              <option value="Teslim Edildi">Teslim Edildi</option>
+              <option value="Gecikmede">Gecikmede</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-medium text-slate-700">İlerleme Yüzdesi</label>
+            <span class="text-xs font-bold text-blue-600" id="modalShipProgressVal">%50</span>
+          </div>
+          <input class="w-full accent-blue-600 cursor-pointer" id="modalShipProgress" max="100" min="0" oninput="document.getElementById('modalShipProgressVal').textContent = '%' + this.value" step="5" type="range" value="50"/>
+        </div>
+
+        <div class="flex justify-between items-center pt-3 border-t border-slate-100 mt-2">
+          <button class="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-medium cursor-pointer hidden" id="btnDeleteShipment" onclick="deleteCurrentShipment()" type="button">Sevkiyatı Sil</button>
+          <div class="flex gap-2 ml-auto">
+            <button class="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-medium cursor-pointer" onclick="closeShipmentModal()" type="button">İptal</button>
+            <button class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium cursor-pointer" id="btnSaveShipment" type="submit">Kaydet</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 3: HATIRLATICI EKLE (TEDARİKÇİ İLE) ==================== -->
+  <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4" id="reminderModal">
+    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-5 border border-slate-200 relative">
+      <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+        <h3 class="font-bold text-slate-900 text-base">Yeni Hatırlatıcı</h3>
+        <button class="text-slate-400 hover:text-slate-700 cursor-pointer" onclick="closeReminderModal()">✕</button>
+      </div>
+      <form class="space-y-3" onsubmit="handleReminderSubmit(event)">
+        <!-- Tedarikçi Seçimi -->
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">İlgili Tedarikçi / Firma</label>
+          <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none cursor-pointer" id="modalRemSupplier">
+            <!-- JS ile dinamik doldurulur -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">Kategori / Kanal</label>
+          <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" id="modalRemTarget">
+            <option value="HSG Çin">HSG Çin Fabrika</option>
+            <option value="Müşteri Onayı">Müşteri Onayı</option>
+            <option value="Lojistik & Gümrük">Lojistik & Gümrük</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">Konu / Hatırlatma Notu</label>
+          <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" id="modalRemTitle" placeholder="örn: Lazer Kafa Teknik Çizimi Onayı" required="" type="text"/>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">Kalan Süre (Gün)</label>
+          <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" id="modalRemDays" min="1" required="" type="number" value="3"/>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 mt-2">
+          <button class="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-medium cursor-pointer" onclick="closeReminderModal()" type="button">İptal</button>
+          <button class="px-4 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-medium cursor-pointer" type="submit">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 4: FİRMA / TEDARİKÇİ EKLE / DÜZENLE ==================== -->
+  <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4" id="supplierModal">
+    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-5 border border-slate-200 relative max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+        <h3 class="font-bold text-slate-900 text-base" id="supplierModalTitle">Yeni Firma Ekle</h3>
+        <button class="text-slate-400 hover:text-slate-700 cursor-pointer" onclick="closeSupplierModal()">✕</button>
+      </div>
+      <form class="space-y-3" onsubmit="handleSupplierSubmit(event)">
+        <input type="hidden" id="modalSupId" value=""/>
+        <input type="hidden" id="modalSupOrigName" value=""/>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">Firma Adı</label>
+          <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:bg-white" id="modalSupName" placeholder="örn: Marmara Hidrolik Ltd." required="" type="text"/>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Tür</label>
+            <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:bg-white" id="modalSupCategory">
+              <option value="turkey">Türkiye Yerel Bayi</option>
+              <option value="china">Çin HSG Partner</option>
+              <option value="global">Global Tedarikçi</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Firma Kodu</label>
+            <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:bg-white" id="modalSupCode" placeholder="örn: TR-IST-042" type="text"/>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">Şehir / Lokasyon</label>
+          <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:bg-white" id="modalSupLoc" placeholder="örn: Bursa, TR / Şanghay, Çin" required="" type="text"/>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">İletişim Yetkilisi</label>
+            <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:bg-white" id="modalSupContact" placeholder="Ad Soyad" required="" type="text"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Telefon</label>
+            <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:bg-white" id="modalSupPhone" placeholder="+90 212 555 0000" type="text"/>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">E-posta (İsteğe Bağlı)</label>
+          <input class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:bg-white" id="modalSupEmail" placeholder="info@tedarikci.com" type="email"/>
+        </div>
+        <div class="flex justify-between items-center pt-3 border-t border-slate-100 mt-2">
+          <button class="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-medium cursor-pointer hidden" id="btnDeleteSupplier" onclick="deleteCurrentSupplier()" type="button">Firmayı Sil</button>
+          <div class="flex gap-2 ml-auto">
+            <button class="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-medium cursor-pointer" onclick="closeSupplierModal()" type="button">İptal</button>
+            <button class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium cursor-pointer" id="btnSaveSupplier" type="submit">Kaydet</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 5: TEDARİKÇİ DETAYI & ALINAN TÜM PARÇALAR / GEÇMİŞ ==================== -->
+  <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4" id="supplierHistoryModal">
+    <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full p-6 border border-slate-200 relative max-h-[90vh] flex flex-col">
+      <!-- Modal Header -->
+      <div class="flex items-start justify-between pb-4 border-b border-slate-200">
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="font-bold text-slate-900 text-lg" id="histSupName">Firma Adı</h3>
+            <span class="text-xs px-2.5 py-0.5 rounded-full font-medium" id="histSupBadge">Tür</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5" id="histSupMeta">Konum • Yetkili • Telefon</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors" onclick="openEditSupplierModalFromHistory()">
+            <span class="material-symbols-outlined text-[15px]">edit</span>
+            <span>Düzenle</span>
+          </button>
+          <button class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg cursor-pointer" onclick="closeSupplierHistoryModal()">✕</button>
+        </div>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="flex-1 overflow-y-auto py-4 space-y-6">
+        
+        <!-- Özet Sayaçlar -->
+        <div class="grid grid-cols-3 gap-3">
+          <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <span class="text-[11px] text-slate-500 uppercase font-medium">Alınan Toplam Parça</span>
+            <div class="text-lg font-bold text-slate-900 mt-0.5" id="histTotalQty">0 Adet</div>
+          </div>
+          <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <span class="text-[11px] text-slate-500 uppercase font-medium">Toplam Sipariş / Talep</span>
+            <div class="text-lg font-bold text-blue-600 mt-0.5" id="histTotalOrders">0 Kayıt</div>
+          </div>
+          <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <span class="text-[11px] text-slate-500 uppercase font-medium">Bağlı Sevkiyat</span>
+            <div class="text-lg font-bold text-emerald-600 mt-0.5" id="histTotalShipments">0 Adet</div>
+          </div>
+        </div>
+
+        <!-- 1. Alınan Yedek Parçalar Listesi -->
+        <div>
+          <h4 class="font-semibold text-slate-900 text-sm mb-2 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px] text-blue-600">inventory_2</span>
+            <span>Bu Tedarikçiden Alınan / Sipariş Edilen Parçalar</span>
+          </h4>
+          <div class="border border-slate-200 rounded-lg overflow-hidden">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium">
+                  <th class="py-2.5 px-3">PARÇA ADI & SKU</th>
+                  <th class="py-2.5 px-3">MİKTAR</th>
+                  <th class="py-2.5 px-3">KANAL</th>
+                  <th class="py-2.5 px-3">DURUM</th>
+                  <th class="py-2.5 px-3 text-right">TARİH</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100" id="histPartsTableBody">
+                <!-- JS ile dolar -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 2. Bağlı Sevkiyatlar -->
+        <div>
+          <h4 class="font-semibold text-slate-900 text-sm mb-2 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px] text-amber-600">local_shipping</span>
+            <span>Tedarikçiye Ait Sevkiyatlar</span>
+          </h4>
+          <div class="space-y-2" id="histShipmentsContainer">
+            <!-- JS ile dolar -->
+          </div>
+        </div>
+
+        <!-- 3. Bağlı Hatırlatıcılar -->
+        <div>
+          <h4 class="font-semibold text-slate-900 text-sm mb-2 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px] text-red-600">notifications_active</span>
+            <span>Tedarikçiyle İlgili Bekleyen Hatırlatıcılar</span>
+          </h4>
+          <div class="space-y-2" id="histRemindersContainer">
+            <!-- JS ile dolar -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="pt-3 border-t border-slate-200 flex justify-end">
+        <button class="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-medium cursor-pointer hover:bg-slate-800" onclick="closeSupplierHistoryModal()">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Bildirim Alanı -->
+  <div id="toastContainer"></div>
+
+  <!-- Core Scripts -->
+  <script src="js/supabase.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
+
