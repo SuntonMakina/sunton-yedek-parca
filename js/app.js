@@ -102,6 +102,51 @@ function renderCurrentPage() {
   else if (p === 'tedarikciler') renderSuppliers();
 }
 
+// Türkiye Saatine (UTC+3) Göre Kalan Gün Hesabı
+function calculateReminderDaysLeft(rem) {
+  if (!rem) return 0;
+  
+  const now = new Date();
+  const trTodayStr = now.toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+  const todayMs = new Date(trTodayStr + 'T00:00:00').getTime();
+
+  let targetDueMs = null;
+
+  if (rem.due_date) {
+    const dueStr = String(rem.due_date).substring(0, 10);
+    targetDueMs = new Date(dueStr + 'T00:00:00').getTime();
+  } else if (rem.created_at && (rem.deadline_days !== undefined || rem.days_left !== undefined)) {
+    const createdStr = String(rem.created_at).substring(0, 10);
+    const createdMs = new Date(createdStr + 'T00:00:00').getTime();
+    const days = parseInt(rem.deadline_days !== undefined ? rem.deadline_days : rem.days_left) || 0;
+    targetDueMs = createdMs + (days * 86400000);
+  }
+
+  if (targetDueMs !== null && !isNaN(targetDueMs)) {
+    const diffMs = targetDueMs - todayMs;
+    return Math.round(diffMs / (1000 * 60 * 60 * 24));
+  }
+
+  return parseInt(rem.days_left) || 0;
+}
+
+// Modalda Türkiye Saatine Göre Son Tarihi Dinamik Göster
+function updateReminderCalculatedDate() {
+  const daysInput = document.getElementById('modalRemDays');
+  const dateEl = document.getElementById('modalRemCalculatedDate');
+  if (!daysInput || !dateEl) return;
+
+  const days = parseInt(daysInput.value) || 0;
+  const now = new Date();
+  const trTodayStr = now.toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+  const todayMs = new Date(trTodayStr + 'T00:00:00').getTime();
+  const dueMs = todayMs + (days * 86400000);
+  const targetDate = new Date(dueMs);
+  
+  const formatted = targetDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'short' });
+  dateEl.textContent = formatted;
+}
+
 // ==================== 1. GENEL BAKIŞ (DASHBOARD) ====================
 function renderDashboard() {
   const totalStock = appState.inventory.reduce((acc, i) => acc + (parseInt(i.quantity) || 0), 0);
@@ -114,8 +159,16 @@ function renderDashboard() {
   const supEl = document.getElementById('dashSuppliersCount');
   if (supEl) supEl.textContent = `${appState.suppliers.length} Firma`;
 
+  // Hatırlatıcılar & Süresi Dolan Kritik Uyarılar
+  const overdueReminders = appState.reminders.filter(r => calculateReminderDaysLeft(r) <= 0);
   const remEl = document.getElementById('dashRemindersCount');
-  if (remEl) remEl.textContent = appState.reminders.length;
+  if (remEl) {
+    if (overdueReminders.length > 0) {
+      remEl.innerHTML = `<span class="flex items-center gap-2 text-red-600">${appState.reminders.length} <span class="text-xs px-2 py-0.5 rounded-full bg-red-600 text-white font-bold animate-pulse">🚨 ${overdueReminders.length} Süresi Doldu!</span></span>`;
+    } else {
+      remEl.textContent = appState.reminders.length;
+    }
+  }
 
   // Son Parça Talepleri
   const recentReqEl = document.getElementById('dashRecentRequests');
@@ -136,22 +189,72 @@ function renderDashboard() {
     }
   }
 
-  // Bekleyen Hatırlatıcılar
+  // Bekleyen Hatırlatıcılar (Süresi dolanlar ve aciller en üstte!)
   const recentRemEl = document.getElementById('dashRecentReminders');
   if (recentRemEl) {
-    const reminders = appState.reminders.slice(0, 4);
-    if (reminders.length === 0) {
+    if (appState.reminders.length === 0) {
       recentRemEl.innerHTML = '<p class="text-xs text-slate-400 py-3">Bekleyen hatırlatıcı yok.</p>';
     } else {
-      recentRemEl.innerHTML = reminders.map(rem => `
-        <div class="py-3 flex items-center justify-between text-sm">
-          <div>
-            <div class="font-medium text-slate-900">${rem.title}</div>
-            <div class="text-xs text-slate-500">${rem.supplier_name || rem.target_type}</div>
+      const sortedReminders = [...appState.reminders].sort((a, b) => {
+        return calculateReminderDaysLeft(a) - calculateReminderDaysLeft(b);
+      }).slice(0, 5);
+
+      recentRemEl.innerHTML = sortedReminders.map(rem => {
+        const daysLeft = calculateReminderDaysLeft(rem);
+        const isOverdue = daysLeft <= 0;
+        const isTomorrow = daysLeft === 1;
+
+        if (isOverdue) {
+          return `
+            <div class="py-2.5 px-3 my-1.5 rounded-xl bg-red-50 border-2 border-red-400 shadow-xs flex items-center justify-between text-sm animate-pulse">
+              <div>
+                <div class="font-bold text-red-900 flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-red-600 text-[18px]">error</span>
+                  <span>${rem.title}</span>
+                </div>
+                <div class="text-xs text-red-700 mt-0.5">${rem.supplier_name || rem.target_type} • <span class="font-mono">${rem.reference_id}</span></div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-red-600 text-white shadow-xs">
+                  ${daysLeft < 0 ? `🚨 SÜRESİ GEÇTİ (${Math.abs(daysLeft)}g)` : '🚨 0 GÜN - BUGÜN!'}
+                </span>
+                <button class="bg-red-700 hover:bg-red-800 text-white px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer shadow-xs transition-colors" onclick="completeReminder('${rem.id || rem.reference_id}')">Tamamla ✓</button>
+              </div>
+            </div>
+          `;
+        }
+
+        if (isTomorrow) {
+          return `
+            <div class="py-2.5 px-3 my-1 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between text-sm">
+              <div>
+                <div class="font-semibold text-amber-950 flex items-center gap-1">
+                  <span class="material-symbols-outlined text-amber-600 text-[16px]">schedule</span>
+                  <span>${rem.title}</span>
+                </div>
+                <div class="text-xs text-amber-800">${rem.supplier_name || rem.target_type} • <span class="font-mono">${rem.reference_id}</span></div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">⚡ 1 Gün Kaldı</span>
+                <button class="bg-slate-900 hover:bg-slate-800 text-white px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer" onclick="completeReminder('${rem.id || rem.reference_id}')">Tamamla</button>
+              </div>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="py-3 flex items-center justify-between text-sm">
+            <div>
+              <div class="font-medium text-slate-900">${rem.title}</div>
+              <div class="text-xs text-slate-500">${rem.supplier_name || rem.target_type} • <span class="font-mono">${rem.reference_id}</span></div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">⏳ ${daysLeft} Gün</span>
+              <button class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer" onclick="completeReminder('${rem.id || rem.reference_id}')">Tamamla</button>
+            </div>
           </div>
-          <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${rem.days_left <= 2 ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-700'}">${rem.days_left} Gün</span>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
   }
 }
@@ -460,27 +563,73 @@ function renderReminders() {
     return;
   }
 
-  container.innerHTML = appState.reminders.map(rem => `
-    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-4">
-      <div>
-        <div class="flex items-center gap-2 mb-1 flex-wrap">
-          <span class="text-xs font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700">${rem.supplier_name || 'Tedarikçi'}</span>
-          <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">${rem.target_type}</span>
-          <span class="text-xs text-slate-400 font-mono">${rem.reference_id}</span>
-        </div>
-        <div class="font-medium text-slate-900 text-sm">${rem.title}</div>
-      </div>
+  // Sıralama: Süresi dolanlar (0 ve negatif) en üstte
+  const sorted = [...appState.reminders].sort((a, b) => {
+    return calculateReminderDaysLeft(a) - calculateReminderDaysLeft(b);
+  });
 
-      <div class="flex items-center gap-3 shrink-0">
-        <span class="text-xs font-bold ${rem.days_left <= 2 ? 'text-red-600' : 'text-slate-700'}">${rem.days_left} Gün Kaldı</span>
-        <button class="bg-slate-900 hover:bg-slate-800 text-white px-3 py-1 rounded text-xs font-medium cursor-pointer" onclick="completeReminder('${rem.id || rem.reference_id}')">Tamamla</button>
+  container.innerHTML = sorted.map(rem => {
+    const daysLeft = calculateReminderDaysLeft(rem);
+    const isOverdue = daysLeft <= 0;
+    const isTomorrow = daysLeft === 1;
+
+    let cardBg = 'bg-white border-slate-200 hover:border-slate-300';
+    let badgeHtml = `<span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">⏳ ${daysLeft} Gün Kaldı</span>`;
+    let bannerHtml = '';
+
+    if (isOverdue) {
+      cardBg = 'bg-red-50/80 border-2 border-red-400 shadow-sm';
+      badgeHtml = `
+        <span class="text-xs font-black px-3 py-1.5 rounded-lg bg-red-600 text-white shadow-xs animate-pulse">
+          ${daysLeft < 0 ? `🚨 SÜRESİ GEÇTİ (${Math.abs(daysLeft)} GÜN)` : '🚨 0 GÜN - BUGÜN SON GÜN!'}
+        </span>
+      `;
+      bannerHtml = `
+        <div class="mb-2 px-2.5 py-1 rounded-md bg-red-100 border border-red-300 text-red-900 text-xs font-bold flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px] text-red-600">warning</span>
+          <span>DİKKAT: Bu hatırlatıcının süresi dolmuştur! Acil işlem yapınız.</span>
+        </div>
+      `;
+    } else if (isTomorrow) {
+      cardBg = 'bg-amber-50/50 border-amber-300';
+      badgeHtml = `<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300">⚡ 1 Gün Kaldı (Yarın)</span>`;
+    }
+
+    // Tarih bilgisi
+    let dateInfo = '';
+    if (rem.due_date) {
+      const dueObj = new Date(String(rem.due_date).substring(0, 10) + 'T00:00:00');
+      const formattedDue = dueObj.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
+      dateInfo = ` • <span class="font-medium text-slate-600">Son Gün: ${formattedDue}</span>`;
+    }
+
+    return `
+      <div class="p-4 rounded-xl border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${cardBg}">
+        <div>
+          ${bannerHtml}
+          <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700">${rem.supplier_name || 'Tedarikçi'}</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">${rem.target_type}</span>
+            <span class="text-xs text-slate-400 font-mono">${rem.reference_id}</span>
+            <span class="text-[11px] text-slate-400">${dateInfo}</span>
+          </div>
+          <div class="font-bold text-slate-900 text-base">${rem.title}</div>
+        </div>
+
+        <div class="flex items-center gap-3 shrink-0 self-end sm:self-center">
+          ${badgeHtml}
+          <button class="${isOverdue ? 'bg-red-600 hover:bg-red-700 text-white font-bold' : 'bg-slate-900 hover:bg-slate-800 text-white font-medium'} px-4 py-2 rounded-lg text-xs cursor-pointer transition-colors shadow-xs" onclick="completeReminder('${rem.id || rem.reference_id}')">
+            Tamamla ✓
+          </button>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function openAddReminderModal() {
   populateSupplierDropdowns();
+  updateReminderCalculatedDate();
   document.getElementById('reminderModal').classList.remove('hidden');
 }
 function closeReminderModal() {
@@ -633,15 +782,21 @@ function openSupplierHistoryModal(supplierName) {
   if (reminders.length === 0) {
     remContainer.innerHTML = '<p class="text-xs text-slate-400 py-2">Bu tedarikçiyle ilgili bekleyen hatırlatıcı yok.</p>';
   } else {
-    remContainer.innerHTML = reminders.map(rem => `
-      <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between text-xs">
-        <div>
-          <span class="font-semibold text-slate-900">${rem.title}</span>
-          <span class="text-slate-500 ml-2 font-mono">${rem.reference_id}</span>
+    remContainer.innerHTML = reminders.map(rem => {
+      const daysLeft = calculateReminderDaysLeft(rem);
+      const isOverdue = daysLeft <= 0;
+      return `
+        <div class="p-2.5 rounded-lg border flex items-center justify-between text-xs ${isOverdue ? 'bg-red-50 border-red-300 text-red-900 font-semibold' : 'bg-slate-50 border-slate-200'}">
+          <div>
+            <span class="font-semibold">${rem.title}</span>
+            <span class="text-slate-500 ml-2 font-mono">${rem.reference_id}</span>
+          </div>
+          <span class="font-bold ${isOverdue ? 'text-red-700 bg-red-100 px-2 py-0.5 rounded' : (daysLeft === 1 ? 'text-amber-700' : 'text-slate-700')}">
+            ${isOverdue ? (daysLeft < 0 ? `🚨 Süresi Geçti (${Math.abs(daysLeft)}g)` : '🚨 0 Gün (Bugün)') : `⏳ ${daysLeft} Gün`}
+          </span>
         </div>
-        <span class="font-bold ${rem.days_left <= 2 ? 'text-red-600' : 'text-slate-700'}">${rem.days_left} Gün Kaldı</span>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   // Modalı Göster

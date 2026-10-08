@@ -201,7 +201,10 @@ const INITIAL_DATA = {
       supplier_name: 'HSG Shanghai Precision Parts',
       reference_id: '#HSG-8821',
       title: 'Rezonatör Aynası Teknik Şeması Onayı',
+      deadline_days: 4,
       days_left: 4,
+      created_at: new Date(Date.now() - 3600000 * 24).toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' }),
+      due_date: new Date(Date.now() + 3600000 * 24 * 3).toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' }),
       priority: 'Kritik'
     },
     {
@@ -210,7 +213,10 @@ const INITIAL_DATA = {
       supplier_name: 'Anadolu Hidrolik Makina',
       reference_id: '#MŞT-4402',
       title: 'Hidrolik Valf Takımı Kalite Tutanağı',
-      days_left: 1,
+      deadline_days: 1,
+      days_left: 0,
+      created_at: new Date(Date.now() - 3600000 * 24 * 2).toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' }),
+      due_date: new Date(Date.now()).toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' }),
       priority: 'Acil'
     },
     {
@@ -219,7 +225,10 @@ const INITIAL_DATA = {
       supplier_name: 'HSG Guangzhou Logistics',
       reference_id: '#HSG-9104',
       title: 'CNC Sürücü Kartı Gümrük Beyannamesi',
-      days_left: 6,
+      deadline_days: 6,
+      days_left: 5,
+      created_at: new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' }),
+      due_date: new Date(Date.now() + 3600000 * 24 * 5).toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' }),
       priority: 'Normal'
     }
   ]
@@ -624,13 +633,25 @@ class SupabaseService {
 
   async addReminder(rem) {
     const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REMINDERS) || '[]');
+    const now = new Date();
+    const trTodayStr = now.toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+    const days = parseInt(rem.days_left || rem.deadline_days) || 3;
+    
+    // TR saatine göre hedef son tarih hesabı
+    const todayMs = new Date(trTodayStr + 'T00:00:00').getTime();
+    const dueMs = todayMs + (days * 86400000);
+    const trDueStr = new Date(dueMs).toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+
     const clean = {
       id: 'rem-' + Date.now(),
       target_type: rem.target_type || 'HSG Çin',
       supplier_name: rem.supplier_name || 'Genel Tedarikçi',
       reference_id: '#REF-' + Math.floor(1000 + Math.random() * 9000),
       title: rem.title,
-      days_left: parseInt(rem.days_left) || 3,
+      deadline_days: days,
+      days_left: days,
+      created_at: trTodayStr,
+      due_date: trDueStr,
       priority: rem.priority || 'Normal'
     };
     list.unshift(clean);
@@ -643,7 +664,7 @@ class SupabaseService {
           supplier_name: clean.supplier_name,
           reference_id: clean.reference_id,
           title: clean.title,
-          deadline_days: clean.days_left,
+          deadline_days: clean.deadline_days,
           priority: clean.priority
         }]);
       } catch (err) {
