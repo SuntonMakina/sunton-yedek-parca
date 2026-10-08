@@ -225,6 +225,11 @@ const INITIAL_DATA = {
   ]
 };
 
+const DEFAULT_SUPABASE_CONFIG = {
+  url: 'https://fgihcsaqbszlayxoptwt.supabase.co',
+  anonKey: 'sb_publishable_tTdOCpRiJ_Pf_BIfhVHDYw_2mzofSin'
+};
+
 class SupabaseService {
   constructor() {
     this.client = null;
@@ -233,15 +238,16 @@ class SupabaseService {
   }
 
   init() {
-    const savedUrl = localStorage.getItem(STORAGE_KEYS.SUPABASE_URL) || '';
-    const savedKey = localStorage.getItem(STORAGE_KEYS.SUPABASE_KEY) || '';
-    const useLive = localStorage.getItem(STORAGE_KEYS.USE_LIVE_SUPABASE) === 'true';
+    const savedUrl = localStorage.getItem(STORAGE_KEYS.SUPABASE_URL) || DEFAULT_SUPABASE_CONFIG.url;
+    const savedKey = localStorage.getItem(STORAGE_KEYS.SUPABASE_KEY) || DEFAULT_SUPABASE_CONFIG.anonKey;
+    const useLive = localStorage.getItem(STORAGE_KEYS.USE_LIVE_SUPABASE) !== 'false';
 
     if (savedUrl && savedKey && window.supabase && useLive) {
       try {
         this.client = window.supabase.createClient(savedUrl, savedKey);
         this.isLive = true;
       } catch (err) {
+        console.warn('Supabase client error:', err);
         this.isLive = false;
       }
     } else {
@@ -278,8 +284,8 @@ class SupabaseService {
 
   getCredentials() {
     return {
-      url: localStorage.getItem(STORAGE_KEYS.SUPABASE_URL) || '',
-      key: localStorage.getItem(STORAGE_KEYS.SUPABASE_KEY) || '',
+      url: localStorage.getItem(STORAGE_KEYS.SUPABASE_URL) || DEFAULT_SUPABASE_CONFIG.url,
+      key: localStorage.getItem(STORAGE_KEYS.SUPABASE_KEY) || DEFAULT_SUPABASE_CONFIG.anonKey,
       isLive: this.isLive
     };
   }
