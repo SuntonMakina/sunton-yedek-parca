@@ -277,9 +277,10 @@
           </div>
 
           <!-- Durum / Aşama Seçimi -->
+          <!-- Durum / Aşama Seçimi -->
           <div>
             <label class="block text-xs font-medium text-slate-700 mb-1">Başlangıç Durumu / Aşaması</label>
-            <select class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-600 cursor-pointer font-medium" id="formReqStage">
+            <select class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-600 cursor-pointer font-medium" id="formReqStage" onchange="toggleFormProformaSection(this.value)">
               <option value="1">1. Talep Açıldı / Mesaj Bekleniyor</option>
               <option value="2">2. Tedarikçi Onayladı / Hazırlanıyor</option>
               <option value="3">3. Çin'den Çıkış Bekliyor</option>
@@ -304,31 +305,93 @@
             </div>
           </div>
 
-          <!-- Sohbet Ekran Görüntüsü / Resim Yükleme -->
+          <!-- Sohbet Ekran Görüntüsü / Resim Yükleme (Geliştirilmiş) -->
           <div>
             <label class="block text-xs font-medium text-slate-700 mb-1 flex items-center justify-between">
-              <span>Sohbet Ekran Görüntüsü / Parça Görseli (İsteğe Bağlı)</span>
-              <span class="text-[11px] text-slate-400">WhatsApp, WeChat veya Belge</span>
+              <span class="flex items-center gap-1 font-semibold">
+                <span class="material-symbols-outlined text-[16px] text-blue-600">add_photo_alternate</span>
+                <span>Sohbet Ekran Görüntüsü / Parça Görseli</span>
+              </span>
+              <span class="text-[11px] text-slate-400">Ctrl+V / Cmd+V ile yapıştırabilirsiniz</span>
             </label>
-            <div class="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-3 text-center bg-slate-50 transition-colors relative cursor-pointer" onclick="document.getElementById('formReqChatImageFile').click()">
-              <input accept="image/*" class="hidden" id="formReqChatImageFile" onchange="handleRequestImageUpload(event)" type="file"/>
-              <input id="formReqChatImageBase64" type="hidden" value=""/>
-              
-              <div class="flex flex-col items-center py-2" id="formReqUploadPrompt">
-                <span class="material-symbols-outlined text-slate-400 text-3xl mb-1">add_photo_alternate</span>
-                <span class="text-xs font-medium text-slate-700">Resim Seçmek İçin Tıklayın veya Sürükleyin</span>
-                <span class="text-[11px] text-slate-400 mt-0.5">PNG, JPG, JPEG (Maks. 5MB)</span>
+            
+            <input accept="image/*,.png,.jpg,.jpeg,.webp" class="hidden" id="formReqChatImageFile" onchange="handleRequestImageUpload(event)" type="file"/>
+            <input id="formReqChatImageBase64" type="hidden" value=""/>
+            
+            <!-- Yükleme Kutusu / Dropzone -->
+            <div class="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-3 text-center bg-slate-50 transition-all relative" id="formReqImageDropzone">
+              <div class="flex flex-col items-center py-2 cursor-pointer" id="formReqUploadPrompt" onclick="document.getElementById('formReqChatImageFile').click()">
+                <span class="material-symbols-outlined text-slate-400 text-3xl mb-1">cloud_upload</span>
+                <span class="text-xs font-semibold text-slate-700">Resim Seçmek İçin Tıklayın veya Sürükleyip Bırakın</span>
+                <span class="text-[11px] text-slate-400 mt-0.5">PNG, JPG, WEBP (Otomatik optimize edilir)</span>
               </div>
 
-              <div class="hidden flex items-center justify-between bg-white p-2 rounded-lg border border-slate-200" id="formReqImagePreviewContainer">
+              <!-- Yüklendi Önizlemesi -->
+              <div class="hidden flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200 shadow-xs" id="formReqImagePreviewContainer">
                 <div class="flex items-center gap-3">
-                  <img alt="Önizleme" class="w-12 h-12 object-cover rounded-md border border-slate-200" id="formReqImagePreview" src=""/>
+                  <img alt="Önizleme" class="w-12 h-12 object-cover rounded-md border border-slate-200 cursor-pointer hover:opacity-90" id="formReqImagePreview" onclick="openImageLightbox(this.src)" src="" title="Büyütmek İçin Tıkla"/>
                   <div class="text-left">
-                    <div class="text-xs font-semibold text-slate-900" id="formReqImageFileName">gorsel.png</div>
-                    <span class="text-[11px] text-emerald-600 font-medium">✓ Görsel Hazır</span>
+                    <div class="text-xs font-bold text-slate-900 truncate max-w-[200px]" id="formReqImageFileName">gorsel.png</div>
+                    <div class="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                      <span>✓ Görsel Hazır</span>
+                      <span class="text-slate-400 font-normal" id="formReqImageFileSize"></span>
+                    </div>
                   </div>
                 </div>
-                <button class="text-xs text-red-600 hover:bg-red-50 p-1.5 rounded-md font-medium cursor-pointer" onclick="event.stopPropagation(); removeRequestUploadedImage()" type="button">✕ Kaldır</button>
+                <div class="flex items-center gap-1">
+                  <button class="text-xs text-blue-600 hover:bg-blue-50 px-2 py-1.5 rounded-md font-medium cursor-pointer" onclick="openImageLightbox(document.getElementById('formReqImagePreview').src)" type="button">Büyüt</button>
+                  <button class="text-xs text-red-600 hover:bg-red-50 px-2 py-1.5 rounded-md font-medium cursor-pointer" onclick="removeRequestUploadedImage()" type="button">✕ Kaldır</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Adım Proforma Faturası Ekleme Alanı (İsteğe Bağlı & 2. Adımda Öne Çıkar) -->
+          <div class="p-3.5 bg-amber-50/70 rounded-xl border border-amber-200/80 transition-all" id="formReqProformaSection">
+            <label class="block text-xs font-bold text-amber-950 mb-1.5 flex items-center justify-between">
+              <span class="flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[18px] text-amber-700">description</span>
+                <span>Tedarikçi Proforma Faturası (2. Aşama Belgesi)</span>
+              </span>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-amber-200/60 text-amber-900 font-semibold">PDF veya Görsel</span>
+            </label>
+            
+            <input accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg" class="hidden" id="formReqProformaFile" onchange="handleFormProformaUpload(event)" type="file"/>
+            <input id="formReqProformaBase64" type="hidden" value=""/>
+            <input id="formReqProformaFileName" type="hidden" value=""/>
+            <input id="formReqProformaFileType" type="hidden" value=""/>
+
+            <div class="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                <label class="block text-[11px] font-medium text-slate-700 mb-0.5">Proforma Fatura No (Opsiyonel)</label>
+                <input class="w-full bg-white border border-amber-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:border-amber-600" id="formReqProformaNo" placeholder="örn: PI-2026-8819" type="text"/>
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-slate-700 mb-0.5">Tutar / Para Birimi (Opsiyonel)</label>
+                <input class="w-full bg-white border border-amber-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:border-amber-600" id="formReqProformaAmount" placeholder="örn: $4,250 USD veya 145.000 ₺" type="text"/>
+              </div>
+            </div>
+
+            <!-- Proforma Dropzone -->
+            <div class="border-2 border-dashed border-amber-300 hover:border-amber-500 rounded-xl p-2.5 text-center bg-white transition-all cursor-pointer" id="formReqProformaDropzone" onclick="document.getElementById('formReqProformaFile').click()">
+              <div class="flex items-center justify-center gap-2 py-1" id="formReqProformaPrompt">
+                <span class="material-symbols-outlined text-amber-600 text-2xl">upload_file</span>
+                <div class="text-left">
+                  <div class="text-xs font-semibold text-slate-800">Proforma Dosyası Yükle (PDF / Resim)</div>
+                  <div class="text-[10px] text-slate-500">Tıkla veya sürükle bırak</div>
+                </div>
+              </div>
+
+              <!-- Proforma Önizleme -->
+              <div class="hidden flex items-center justify-between p-2 bg-amber-50/50 rounded-lg border border-amber-200" id="formReqProformaPreviewContainer">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-2xl text-amber-700" id="formReqProformaIcon">description</span>
+                  <div class="text-left">
+                    <div class="text-xs font-bold text-slate-900 truncate max-w-[200px]" id="formReqProformaDispName">proforma.pdf</div>
+                    <span class="text-[10px] text-emerald-700 font-semibold">✓ Belge Eklendi</span>
+                  </div>
+                </div>
+                <button class="text-xs text-red-600 hover:bg-red-50 p-1 rounded font-medium cursor-pointer" onclick="event.stopPropagation(); removeFormProforma()" type="button">✕ Kaldır</button>
               </div>
             </div>
           </div>
@@ -341,8 +404,9 @@
 
           <!-- Buton -->
           <div class="pt-2">
-            <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors cursor-pointer shadow-sm" type="submit">
-              Talebi Oluştur ve Gönder
+            <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-2" type="submit">
+              <span class="material-symbols-outlined text-[18px]">send</span>
+              <span>Talebi Oluştur ve Gönder</span>
             </button>
           </div>
         </form>
@@ -740,6 +804,79 @@
         </div>
       </div>
 
+      <!-- 2. Adım: Tedarikçi Onay & Proforma Faturası Bölümü -->
+      <div class="mb-5 p-4 bg-amber-50/60 rounded-xl border border-amber-200 transition-all relative" id="reqDetProformaSection">
+        <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
+          <span class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px] text-amber-700">description</span>
+            <span>2. Adım: Tedarikçi Proforma Faturası</span>
+          </span>
+          <span class="text-[11px] font-bold px-2 py-0.5 rounded-full" id="reqDetProformaStatusBadge">Ekli Belge Yok</span>
+        </label>
+
+        <!-- 2. Adım Vurgu Bildirimi -->
+        <div class="mb-2.5 p-2 bg-amber-100/70 border border-amber-300 rounded-lg text-xs text-amber-950 flex items-center justify-between hidden" id="reqDetStep2Highlight">
+          <span class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px] text-amber-700">info</span>
+            <span><strong>2. Aşama Gereksinimi:</strong> Tedarikçi onay teyidi ve proforma faturasını ekleyin.</span>
+          </span>
+          <span class="text-[10px] font-bold uppercase bg-amber-200 px-1.5 py-0.5 rounded">Adım 2</span>
+        </div>
+
+        <!-- Proforma Bilgi & İnceleme Kartı (Varsa) -->
+        <div class="hidden bg-white p-3.5 rounded-xl border border-amber-200 shadow-xs mb-2.5" id="reqDetProformaCard">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 border border-amber-300 font-bold" id="reqDetProformaTypeIcon">
+                <span class="material-symbols-outlined text-[24px]">description</span>
+              </div>
+              <div class="min-w-0">
+                <div class="text-xs font-bold text-slate-900 truncate" id="reqDetProformaName">proforma_fatura.pdf</div>
+                <div class="text-xs text-slate-600 mt-0.5 flex items-center gap-2 flex-wrap">
+                  <span id="reqDetProformaNoBadge" class="font-mono font-semibold text-blue-700">No: -</span>
+                  <span id="reqDetProformaAmountBadge" class="font-bold text-emerald-700">Tutar: -</span>
+                  <span id="reqDetProformaDateBadge" class="text-[11px] text-slate-400">📅 -</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Hızlı İnceleme Butonları -->
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer shadow-xs transition-colors" onclick="openCurrentProformaViewer()" type="button" title="Proformayı Tam Ekran İncele">
+                <span class="material-symbols-outlined text-[16px]">visibility</span>
+                <span>İncele</span>
+              </button>
+              <button class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors" onclick="downloadCurrentProforma()" type="button" title="İndir">
+                <span class="material-symbols-outlined text-[16px]">download</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Proforma Yükleme / Değiştirme Girişi -->
+        <div class="space-y-2">
+          <div class="grid grid-cols-2 gap-2" id="reqDetProformaInputsGroup">
+            <div>
+              <input class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 outline-none focus:border-amber-600" id="reqDetProformaNoInput" placeholder="Proforma No (örn: PI-2026-8819)" type="text"/>
+            </div>
+            <div>
+              <input class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 outline-none focus:border-amber-600" id="reqDetProformaAmountInput" placeholder="Tutar (örn: $4,850 USD)" type="text"/>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <button class="text-xs text-amber-900 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg border border-amber-300 font-semibold cursor-pointer transition-colors flex items-center gap-1" onclick="document.getElementById('reqDetProformaUploadInput').click()" type="button">
+              <span class="material-symbols-outlined text-[16px]">upload_file</span>
+              <span id="btnReqDetProformaUploadText">Proforma Faturası Yükle (PDF / Görsel)</span>
+            </button>
+            <button class="text-xs text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg border border-red-200 font-medium cursor-pointer transition-colors hidden" id="btnReqDetRemoveProforma" onclick="removeRequestDetailProforma()" type="button">
+              ✕ Proformayı Kaldır
+            </button>
+            <input accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg" class="hidden" id="reqDetProformaUploadInput" onchange="handleRequestDetailProformaUpload(event)" type="file"/>
+          </div>
+        </div>
+      </div>
+
       <!-- Ekran Görüntüsü / Sohbet Resmi Bölümü -->
       <div class="mb-5 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
         <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
@@ -750,7 +887,7 @@
           <span class="text-[11px] text-slate-400" id="reqDetImageStatus">Ekli Görsel Yok</span>
         </label>
 
-        <div class="hidden" id="reqDetImageContainer">
+        <div class="hidden mb-2" id="reqDetImageContainer">
           <div class="relative group inline-block">
             <img alt="Sohbet Ekran Görüntüsü" class="max-h-56 rounded-lg border border-slate-300 object-contain cursor-pointer hover:opacity-95 shadow-xs transition-opacity" id="reqDetImageThumb" onclick="openImageLightbox(this.src)" src=""/>
             <div class="absolute bottom-2 left-2 bg-slate-900/80 text-white text-[11px] px-2 py-0.5 rounded backdrop-blur-xs flex items-center gap-1 pointer-events-none">
@@ -769,7 +906,7 @@
           <button class="text-xs text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg border border-red-200 font-medium cursor-pointer transition-colors hidden" id="btnReqDetRemoveImg" onclick="removeRequestDetailImage()" type="button">
             ✕ Resmi Kaldır
           </button>
-          <input accept="image/*" class="hidden" id="reqDetUploadInput" onchange="handleRequestDetailImageUpload(event)" type="file"/>
+          <input accept="image/*,.png,.jpg,.jpeg,.webp" class="hidden" id="reqDetUploadInput" onchange="handleRequestDetailImageUpload(event)" type="file"/>
         </div>
       </div>
 
@@ -802,6 +939,66 @@
     <div class="relative max-w-4xl max-h-[90vh] flex flex-col items-center justify-center" onclick="event.stopPropagation()">
       <button class="absolute -top-10 right-0 text-white hover:text-slate-300 text-2xl font-bold cursor-pointer" onclick="closeImageLightbox()">✕</button>
       <img alt="Büyütülmüş Görsel" class="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain border border-slate-700" id="lightboxImage" src=""/>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 8: PROFORMA FATURA İNCELEME & GÖRÜNTÜLEME ==================== -->
+  <div class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-70 hidden flex items-center justify-center p-3 sm:p-5" id="proformaViewerModal" onclick="closeProformaViewer()">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full border border-slate-700 flex flex-col max-h-[95vh] overflow-hidden" onclick="event.stopPropagation()">
+      
+      <!-- Modal Header -->
+      <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-3 shrink-0">
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900 border border-amber-300">📄 Proforma Faturası</span>
+            <span class="font-bold text-slate-900 text-sm" id="proformaModalTitle">Proforma Belgesi</span>
+            <span class="font-mono text-xs text-blue-700 font-semibold" id="proformaModalNo">-</span>
+          </div>
+          <div class="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+            <span>Tedarikçi: <strong id="proformaModalSupplier" class="text-slate-800">-</strong></span>
+            <span>• Parça: <strong id="proformaModalPart" class="text-slate-800">-</strong></span>
+            <span id="proformaModalAmountWrapper" class="hidden">• Tutar: <strong id="proformaModalAmount" class="text-emerald-700 font-bold">-</strong></span>
+          </div>
+        </div>
+        
+        <div class="flex items-center gap-2">
+          <button class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold cursor-pointer border border-blue-200 flex items-center gap-1 transition-colors" id="btnProformaDownload" onclick="downloadCurrentProformaFromViewer()" type="button">
+            <span class="material-symbols-outlined text-[16px]">download</span>
+            <span>İndir</span>
+          </button>
+          <button class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer border border-slate-200 flex items-center gap-1 transition-colors" onclick="printCurrentProforma()" type="button">
+            <span class="material-symbols-outlined text-[16px]">print</span>
+            <span>Yazdır</span>
+          </button>
+          <button class="w-8 h-8 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center text-sm font-bold cursor-pointer transition-colors ml-1" onclick="closeProformaViewer()" type="button">✕</button>
+        </div>
+      </div>
+
+      <!-- Viewer Body -->
+      <div class="p-4 overflow-y-auto flex-1 flex flex-col items-center justify-center min-h-[55vh] bg-slate-100">
+        <!-- PDF Viewer Container -->
+        <div class="w-full h-full min-h-[65vh] hidden" id="proformaPdfContainer">
+          <iframe class="w-full h-[65vh] rounded-xl border border-slate-300 shadow-inner bg-white" id="proformaPdfIframe" src=""></iframe>
+        </div>
+
+        <!-- Image Viewer Container -->
+        <div class="w-full flex items-center justify-center hidden" id="proformaImageContainer">
+          <img alt="Proforma Fatura Görseli" class="max-w-full max-h-[70vh] rounded-xl object-contain shadow-md border border-slate-300 bg-white cursor-zoom-in" id="proformaImagePreview" onclick="openImageLightbox(this.src)" src="" title="Daha da Büyütmek İçin Tıkla"/>
+        </div>
+
+        <!-- Empty / Error state -->
+        <div class="text-center py-10 text-slate-400 hidden" id="proformaEmptyState">
+          <span class="material-symbols-outlined text-5xl mb-2 text-slate-300">find_in_page</span>
+          <p class="text-sm font-medium text-slate-600">Görüntülenecek proforma dosyası bulunamadı.</p>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500 shrink-0">
+        <span id="proformaModalFileName">belge.pdf</span>
+        <button class="text-blue-600 hover:underline font-semibold cursor-pointer" onclick="closeProformaViewer()">Pencereyi Kapat</button>
+      </div>
+
     </div>
   </div>
 

@@ -14,6 +14,22 @@ const STORAGE_KEYS = {
   REMINDERS: 'sunton_reminders_data'
 };
 
+function safeSetStorage(key, val) {
+  try {
+    localStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
+  } catch (err) {
+    console.warn('LocalStorage quota limit reached for key:', key, err);
+    try {
+      if (typeof val === 'string') {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) {
+          localStorage.setItem(key, JSON.stringify(parsed.slice(0, 30)));
+        }
+      }
+    } catch (e) {}
+  }
+}
+
 const INITIAL_DATA = {
   inventory: [
     { id: '1', sku: 'SKU-9021-HSG', name: 'Hidrolik Pompa Valfi', category: 'Sistem Basınç Parçası', depot: 'Çin HSG Hub', quantity: 45, status: 'Kritik' },
@@ -144,6 +160,13 @@ const INITIAL_DATA = {
       hsg_status: 'Pekin Limanı Gemiye Yüklendi (Maersk)',
       notes: 'WeChat üzerinden Wang Bey ile teyit edildi. Gemi takip no: MAEU902194',
       chat_image: '',
+      proforma_file: '',
+      proforma_name: '',
+      proforma_type: '',
+      proforma_no: '',
+      proforma_amount: '',
+      proforma_notes: '',
+      proforma_date: '',
       created_at: new Date(Date.now() - 3600000 * 26).toISOString(),
       created_at_date: '07 Ekim 2026',
       created_at_time: '09:30'
@@ -163,6 +186,13 @@ const INITIAL_DATA = {
       hsg_status: 'Fabrika üretimi tamamladı, Ningbo antrepo çıkışı bekleniyor',
       notes: 'Fatura ve çeki listesi WhatsApp üzerinden iletildi.',
       chat_image: '',
+      proforma_file: 'data:application/pdf;base64,JVBERi0xLjQKJcOkw7zDtsOfCjEgMCBvYmoKPDwvVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlIC9QYWdlcwovS2lkcyBbMyAwIFJdCi9Db3VudCAxPj4KZW5kb2JqCjMgMCBvYmoKPDwvVHlwZSAvUGFnZQovUGFyZW50IDIgMCBSCi9NZWRpYUJveCBbMCAwIDU5NSA4NDJdCi9Db250ZW50cyA0IDAgUgovUmVzb3VyY2VzIDw8L1Byb2NTZXQgWy9QREYgL1RleHRdCi9Gb250IDw8L0YxIDUgMCBSPj4+Pj4KZW5kb2JqCjUgMCBvYmoKPDwvVHlwZSAvRm9udAovU3VidHlwZSAvVHlwZTEKL0Jhc2VGb250IC9IZWx2ZXRpY2EtQm9sZD4+CmVuZG9iago0IDAgb2JqCjw8L0xlbmd0aCAxOTU+PgpzdHJlYW0KQlQKL0YxIDE4IFRmCjUwIDgwMCBUZAooUFJPRk9STUEgRkFUVVJBIChQUk9GT1JNQSBJTlZPSUNFKSkgVGoKL0YxIDEyIFRmCjUwIDc2MCBUZAooRmlybWE6IEhTRyBOaW5nYm8gRm91bmRyeSAvIFRhbGVwIE5vOiBUUi1IU0ctODg0MjApIFRqCjUwIDczNSBUZAooUGFyY2E6IEFuYSBSb3RvciBEaXNsaSBHcnVidSAtIE1pa3RhcjogMjggQWRldCkgVGoKNTAgNzEwIFRkCihQcm9mb3JtYSBObzogUEktMjAyNi00NDEyIHwgVHV0YXI6ICQzLjg1MCBVU0QpIFRqCkVUCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDE1IDAwMDAwIG4gCjAwMDAwMDAwNjggMDAwMDAgbiAKMDAwMDAwMDEyNSAwMDAwMCBuIAowMDAwMDAwMzM2IDAwMDAwIG4gCjAwMDAwMDAyNTYgMDAwMDAgbiAKdHJhaWxlcgo8PC9TaXplIDYKL1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKNTgxCiUlRU9GCg==',
+      proforma_name: 'Proforma_HSG_Ningbo_88420.pdf',
+      proforma_type: 'pdf',
+      proforma_no: 'PI-2026-4412',
+      proforma_amount: '$3,850 USD',
+      proforma_notes: 'FOB Ningbo teslim şartı',
+      proforma_date: '07 Ekim 2026, 21:30',
       created_at: new Date(Date.now() - 3600000 * 14).toISOString(),
       created_at_date: '07 Ekim 2026',
       created_at_time: '21:15'
@@ -182,6 +212,13 @@ const INITIAL_DATA = {
       hsg_status: 'Kerem Bey ile görüşüldü, paketleme yapılıyor',
       notes: 'Yarın kargo takip kodu verilecek.',
       chat_image: '',
+      proforma_file: 'data:application/pdf;base64,JVBERi0xLjQKJcOkw7zDtsOfCjEgMCBvYmoKPDwvVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlIC9QYWdlcwovS2lkcyBbMyAwIFJdCi9Db3VudCAxPj4KZW5kb2JqCjMgMCBvYmoKPDwvVHlwZSAvUGFnZQovUGFyZW50IDIgMCBSCi9NZWRpYUJveCBbMCAwIDU5NSA4NDJdCi9Db250ZW50cyA0IDAgUgovUmVzb3VyY2VzIDw8L1Byb2NTZXQgWy9QREYgL1RleHRdCi9Gb250IDw8L0YxIDUgMCBSPj4+Pj4KZW5kb2JqCjUgMCBvYmoKPDwvVHlwZSAvRm9udAovU3VidHlwZSAvVHlwZTEKL0Jhc2VGb250IC9IZWx2ZXRpY2EtQm9sZD4+CmVuZG9iago0IDAgb2JqCjw8L0xlbmd0aCAxOTU+PgpzdHJlYW0KQlQKL0YxIDE4IFRmCjUwIDgwMCBUZAooUFJPRk9STUEgRkFUVVJBIChQUk9GT1JNQSBJTlZPSUNFKSkgVGoKL0YxIDEyIFRmCjUwIDc2MCBUZAooRmlybWE6IEFuYWRvbHUgSGlkcm9saWsgTWFraW5hIC8gVGFsZXAgTm86IFRSLUhTRy04ODQxOSkgVGoKNTAgNzM1IFRkCihQYXJjYTogUExDIEtvbnRyb2wgS2FydGkgdjMgLSBNaWt0YXI6IDQ1IEFkZXQpIFRqCjUwIDcxMCBUZAooUHJvZm9ybWEgTm86IFBJLTIwMjYtODgxOSB8IFR1dGFyOiAxMjUuMDAwIFRMICg1MCUgUGVzaW4pKSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxNSAwMDAwMCBuIAowMDAwMDAwMDY4IDAwMDAwIG4gCjAwMDAwMDAxMjUgMDAwMDAgbiAKMDAwMDAwMDMzNiAwMDAwMCBuIAowMDAwMDAwMjU2IDAwMDAwIG4gCnRyYWlsZXIKPDwvU2l6ZSA2Ci9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjU4MQolJUVPRgo=',
+      proforma_name: 'Proforma_Anadolu_Hidrolik_88419.pdf',
+      proforma_type: 'pdf',
+      proforma_no: 'PI-2026-8819',
+      proforma_amount: '125.000 ₺',
+      proforma_notes: '%50 peşin, %50 teslimatta',
+      proforma_date: '08 Ekim 2026, 08:30',
       created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
       created_at_date: '08 Ekim 2026',
       created_at_time: '07:45'
@@ -201,6 +238,13 @@ const INITIAL_DATA = {
       hsg_status: 'Merkez Depo Raf No: B-14 teslim alındı',
       notes: 'İrsaliye imzalandı, stok sistemine aktarıldı.',
       chat_image: '',
+      proforma_file: '',
+      proforma_name: '',
+      proforma_type: '',
+      proforma_no: '',
+      proforma_amount: '',
+      proforma_notes: '',
+      proforma_date: '',
       created_at: new Date(Date.now() - 3600000 * 72).toISOString(),
       created_at_date: '05 Ekim 2026',
       created_at_time: '14:20'
@@ -575,23 +619,7 @@ class SupabaseService {
       try {
         const { data, error } = await this.client.from('requests').select('*').order('created_at', { ascending: false });
         if (!error && data && data.length > 0) {
-          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(data));
-          return data;
-        }
-      } catch (err) {
-        console.warn('Supabase getRequests error:', err);
-      }
-    }
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
-  }
-
-  // ==================== REQUESTS ====================
-  async getRequests() {
-    if (this.isLive && this.client) {
-      try {
-        const { data, error } = await this.client.from('requests').select('*').order('created_at', { ascending: false });
-        if (!error && data && data.length > 0) {
-          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(data));
+          safeSetStorage(STORAGE_KEYS.REQUESTS, JSON.stringify(data));
           return data;
         }
       } catch (err) {
@@ -618,16 +646,23 @@ class SupabaseService {
 
     const clean = {
       id: 'req-' + Date.now(),
-      request_no: 'TR-HSG-' + Math.floor(10000 + Math.random() * 90000),
+      request_no: req.request_no || ('TR-HSG-' + Math.floor(10000 + Math.random() * 90000)),
       company: req.company || 'Sunton Makine Sanayi A.Ş.',
       supplier_name: req.supplier_name || 'HSG Shanghai Precision Parts',
-      part_sku: req.part_sku || 'SKU-' + Math.floor(1000 + Math.random() * 9000),
+      part_sku: req.part_sku || ('SKU-' + Math.floor(1000 + Math.random() * 9000)),
       part_name: req.part_name,
       quantity: parseInt(req.quantity) || 1,
       priority: req.priority || 'Normal',
       supply_channel: req.supply_channel || 'HSG Çin',
       notes: req.notes || '',
       chat_image: req.chat_image || '',
+      proforma_file: req.proforma_file || '',
+      proforma_name: req.proforma_name || '',
+      proforma_type: req.proforma_type || '',
+      proforma_no: req.proforma_no || '',
+      proforma_amount: req.proforma_amount || '',
+      proforma_notes: req.proforma_notes || '',
+      proforma_date: req.proforma_date || (req.proforma_file ? (trDateFormatted + ', ' + trTimeFormatted) : ''),
       stage_step: step,
       stage_label: req.stage_label || stageMap[step] || 'Talep Açıldı / Mesaj Bekleniyor',
       hsg_status: req.hsg_status || 'İşleme Alındı',
@@ -636,7 +671,7 @@ class SupabaseService {
       created_at_time: trTimeFormatted
     };
     list.unshift(clean);
-    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
+    safeSetStorage(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
 
     if (this.isLive && this.client) {
       try {
@@ -651,6 +686,13 @@ class SupabaseService {
           supply_channel: clean.supply_channel,
           notes: clean.notes,
           chat_image: clean.chat_image,
+          proforma_file: clean.proforma_file,
+          proforma_name: clean.proforma_name,
+          proforma_type: clean.proforma_type,
+          proforma_no: clean.proforma_no,
+          proforma_amount: clean.proforma_amount,
+          proforma_notes: clean.proforma_notes,
+          proforma_date: clean.proforma_date,
           stage_step: clean.stage_step,
           stage_label: clean.stage_label,
           status: clean.stage_label,
@@ -667,7 +709,7 @@ class SupabaseService {
   async saveRequest(req) {
     const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
     const idx = list.findIndex(r => r.id === req.id || r.request_no === req.request_no);
-    const step = parseInt(req.stage_step) || 1;
+    const step = parseInt(req.stage_step) || (idx >= 0 ? list[idx].stage_step : 1);
     const stageMap = {
       1: 'Talep Açıldı / Mesaj Bekleniyor',
       2: 'Tedarikçi Onayladı / Hazırlanıyor',
@@ -685,7 +727,7 @@ class SupabaseService {
         stage_label: req.stage_label || stageMap[step] || list[idx].stage_label,
         quantity: parseInt(req.quantity) || list[idx].quantity || 1
       };
-      localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
+      safeSetStorage(STORAGE_KEYS.REQUESTS, JSON.stringify(list));
 
       if (this.isLive && this.client) {
         try {
@@ -698,6 +740,13 @@ class SupabaseService {
             supply_channel: list[idx].supply_channel,
             notes: list[idx].notes,
             chat_image: list[idx].chat_image,
+            proforma_file: list[idx].proforma_file,
+            proforma_name: list[idx].proforma_name,
+            proforma_type: list[idx].proforma_type,
+            proforma_no: list[idx].proforma_no,
+            proforma_amount: list[idx].proforma_amount,
+            proforma_notes: list[idx].proforma_notes,
+            proforma_date: list[idx].proforma_date,
             stage_step: list[idx].stage_step,
             stage_label: list[idx].stage_label,
             status: list[idx].stage_label

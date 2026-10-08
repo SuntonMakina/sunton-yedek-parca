@@ -32,6 +32,7 @@ const appState = {
 // Başlangıç
 document.addEventListener('DOMContentLoaded', async () => {
   setupNavigation();
+  setupDragAndDropAndPasteListeners();
   await loadAllData();
   const hash = window.location.hash.replace('#', '') || 'kontrol-paneli';
   navigateTo(hash);
@@ -215,7 +216,7 @@ function renderDashboard() {
   // Son Parça Talepleri (Tıklanabilir ve Zengin Kartlar)
   const recentReqEl = document.getElementById('dashRecentRequests');
   if (recentReqEl) {
-    const recent = appState.requests.slice(0, 6);
+    const recent = appState.requests.slice(0, 8);
     if (recent.length === 0) {
       recentReqEl.innerHTML = '<p class="text-xs text-slate-400 py-4 text-center">Henüz parça talebi bulunmuyor. Sağ üstteki "+ Talep Oluştur" butonuna basarak ekleyebilirsiniz.</p>';
     } else {
@@ -223,6 +224,7 @@ function renderDashboard() {
         const dt = getRequestCreatedDateTimeFormatted(r);
         const stage = getStageInfo(r.stage_step);
         const hasImage = !!r.chat_image;
+        const hasProforma = !!r.proforma_file;
 
         return `
           <div class="py-3 px-3 -mx-2 rounded-xl hover:bg-slate-50 transition-all cursor-pointer border border-transparent hover:border-slate-200 group flex items-center justify-between gap-3" onclick="openRequestDetailModal('${r.id || r.request_no}')" title="Detayları, Saati ve Adımları Görüntüle">
@@ -230,12 +232,24 @@ function renderDashboard() {
               <div class="flex items-center gap-2 mb-1 flex-wrap">
                 <span class="font-bold text-slate-900 group-hover:text-blue-600 transition-colors text-sm truncate">${r.part_name}</span>
                 <span class="font-mono text-[11px] text-slate-400 font-semibold">${r.request_no}</span>
-                ${hasImage ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200"><span class="material-symbols-outlined text-[13px]">image</span>📷 Sohbet Ekli</span>` : ''}
+                ${hasImage ? `
+                  <button type="button" class="inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors cursor-pointer" onclick="event.stopPropagation(); openImageLightbox('${r.chat_image}')" title="Sohbet / Parça Görselini Büyüt">
+                    <span class="material-symbols-outlined text-[13px]">image</span>
+                    <span>📷 Görsel</span>
+                  </button>
+                ` : ''}
+                ${hasProforma ? `
+                  <button type="button" class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors cursor-pointer shadow-2xs" onclick="event.stopPropagation(); openProformaViewer('${r.id || r.request_no}')" title="2. Adım Proforma Faturasını İncele">
+                    <span class="material-symbols-outlined text-[13px] text-amber-700">description</span>
+                    <span>📄 Proforma İncele</span>
+                  </button>
+                ` : ''}
               </div>
               <div class="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
                 <span>🏢 <strong class="text-slate-700 font-semibold">${r.supplier_name || 'Tedarikçi'}</strong></span>
                 <span>• ${r.quantity} Adet (${r.company})</span>
                 <span>• 📅 ${dt.date}, ⏰ <strong>${dt.time}</strong></span>
+                ${r.proforma_amount ? `<span class="text-emerald-700 font-bold">• 💰 ${r.proforma_amount}</span>` : ''}
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
@@ -807,8 +821,12 @@ function openSupplierHistoryModal(supplierName) {
       return `
         <tr class="hover:bg-blue-50/60 cursor-pointer transition-colors" onclick="closeSupplierHistoryModal(); openRequestDetailModal('${r.id || r.request_no}')" title="Talep Detayını Aç">
           <td class="py-2.5 px-3">
-            <div class="font-bold text-slate-900">${r.part_name}</div>
-            <div class="text-[11px] font-mono text-slate-500">${r.part_sku} • ${r.request_no}</div>
+            <div class="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+              <span>${r.part_name}</span>
+              ${r.proforma_file ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">📄 Proforma</span>` : ''}
+              ${r.chat_image ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">📷 Görsel</span>` : ''}
+            </div>
+            <div class="text-[11px] font-mono text-slate-500">${r.part_sku} • ${r.request_no} ${r.proforma_amount ? `• 💰 ${r.proforma_amount}` : ''}</div>
           </td>
           <td class="py-2.5 px-3 font-semibold text-slate-900">${r.quantity} Adet</td>
           <td class="py-2.5 px-3 text-slate-600">${r.supply_channel}</td>
@@ -988,26 +1006,200 @@ async function deleteSupplier(id) {
   }
 }
 
-// ==================== 6. YENİ TALEP & GÖRSEL YÜKLEME ====================
-function handleRequestImageUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+// ==================== IMAGE OPTIMIZATION & COMPRESSION HELPER ====================
+function formatBytes(bytes, decimals = 1) {
+  if (!bytes || bytes === 0) return '0 KB';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
 
-  if (file.size > 5 * 1024 * 1024) {
-    alert('Lütfen 5MB\'dan küçük bir görsel seçin.');
-    return;
+async function compressImageFile(file, maxWidth = 1280, maxHeight = 1280, quality = 0.82) {
+  return new Promise((resolve) => {
+    if (!file) return resolve({ base64: '', sizeFormatted: '', type: '', name: '' });
+    
+    // PDF ise canvas'a sokmadan doğrudan Data URL oku
+    if (file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf')) {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve({
+        base64: e.target.result,
+        sizeFormatted: formatBytes(file.size),
+        type: 'pdf',
+        name: file.name
+      });
+      reader.onerror = () => resolve({ base64: '', sizeFormatted: '', type: 'pdf', name: file.name });
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    // Resim dosyalarını Canvas ile 1280px max boyuta küçült ve JPEG 0.82 kalitede sıkıştır (ortalama ~70KB)
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          const approxBytes = Math.round((compressedBase64.length * 3) / 4);
+          
+          resolve({
+            base64: compressedBase64,
+            sizeFormatted: formatBytes(approxBytes),
+            type: 'image',
+            name: file.name || 'gorsel.jpg'
+          });
+        } catch (err) {
+          console.warn('Canvas sıkıştırma hatası, ham veri dönülüyor:', err);
+          resolve({
+            base64: e.target.result,
+            sizeFormatted: formatBytes(file.size),
+            type: 'image',
+            name: file.name || 'gorsel.jpg'
+          });
+        }
+      };
+      img.onerror = () => {
+        resolve({
+          base64: e.target.result,
+          sizeFormatted: formatBytes(file.size),
+          type: 'image',
+          name: file.name || 'gorsel.jpg'
+        });
+      };
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve({ base64: '', sizeFormatted: '', type: 'image', name: file.name });
+    reader.readAsDataURL(file);
+  });
+}
+
+function setupDragAndDropAndPasteListeners() {
+  // 1. WeChat / WhatsApp Ekran Görüntüsü İçin Global Pano (Ctrl+V / Cmd+V) Yakalayıcı
+  window.addEventListener('paste', async (e) => {
+    const items = (e.clipboardData || window.clipboardData)?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type && items[i].type.indexOf('image') !== -1) {
+        const blob = items[i].getAsFile();
+        if (!blob) continue;
+
+        const detailModal = document.getElementById('requestDetailModal');
+        const isDetailModalOpen = detailModal && !detailModal.classList.contains('hidden');
+        
+        const result = await compressImageFile(blob);
+        if (!result.base64) continue;
+
+        if (isDetailModalOpen) {
+          currentEditingRequestImage = result.base64;
+          renderRequestDetailImage();
+          showToast('📷 Panodan kopyalanan ekran görüntüsü talep detayına eklendi!');
+        } else {
+          document.getElementById('formReqChatImageBase64').value = result.base64;
+          document.getElementById('formReqImagePreview').src = result.base64;
+          document.getElementById('formReqImageFileName').textContent = 'Pano-Ekran-Goruntusu.jpg';
+          const sizeEl = document.getElementById('formReqImageFileSize');
+          if (sizeEl) sizeEl.textContent = `(${result.sizeFormatted})`;
+          document.getElementById('formReqUploadPrompt').classList.add('hidden');
+          document.getElementById('formReqImagePreviewContainer').classList.remove('hidden');
+          showToast('📷 Panodan kopyalanan ekran görüntüsü form alanına eklendi!');
+        }
+        break;
+      }
+    }
+  });
+
+  // 2. Form Görsel Sürükle-Bırak (Drag & Drop)
+  const imgDropzone = document.getElementById('formReqImageDropzone');
+  if (imgDropzone) {
+    ['dragenter', 'dragover'].forEach(eventName => {
+      imgDropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        imgDropzone.classList.add('border-blue-500', 'bg-blue-50');
+      }, false);
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+      imgDropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        imgDropzone.classList.remove('border-blue-500', 'bg-blue-50');
+      }, false);
+    });
+    imgDropzone.addEventListener('drop', async (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files && files.length > 0) {
+        await processFormImageFile(files[0]);
+      }
+    });
   }
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const base64 = e.target.result;
-    document.getElementById('formReqChatImageBase64').value = base64;
-    document.getElementById('formReqImagePreview').src = base64;
-    document.getElementById('formReqImageFileName').textContent = file.name;
-    document.getElementById('formReqUploadPrompt').classList.add('hidden');
-    document.getElementById('formReqImagePreviewContainer').classList.remove('hidden');
-  };
-  reader.readAsDataURL(file);
+  // 3. Form Proforma Sürükle-Bırak
+  const profDropzone = document.getElementById('formReqProformaDropzone');
+  if (profDropzone) {
+    ['dragenter', 'dragover'].forEach(eventName => {
+      profDropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        profDropzone.classList.add('border-amber-500', 'bg-amber-100/50');
+      }, false);
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+      profDropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        profDropzone.classList.remove('border-amber-500', 'bg-amber-100/50');
+      }, false);
+    });
+    profDropzone.addEventListener('drop', async (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files && files.length > 0) {
+        await processFormProformaFile(files[0]);
+      }
+    });
+  }
+}
+
+// ==================== 6. YENİ TALEP, GÖRSEL VE PROFORMA İŞLEMLERİ ====================
+async function processFormImageFile(file) {
+  if (!file) return;
+  const result = await compressImageFile(file);
+  if (!result.base64) return;
+
+  document.getElementById('formReqChatImageBase64').value = result.base64;
+  document.getElementById('formReqImagePreview').src = result.base64;
+  document.getElementById('formReqImageFileName').textContent = file.name || 'gorsel.jpg';
+  const sizeEl = document.getElementById('formReqImageFileSize');
+  if (sizeEl) sizeEl.textContent = `(${result.sizeFormatted})`;
+  document.getElementById('formReqUploadPrompt').classList.add('hidden');
+  document.getElementById('formReqImagePreviewContainer').classList.remove('hidden');
+  showToast('✓ Görsel eklendi ve optimize edildi.');
+}
+
+async function handleRequestImageUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  await processFormImageFile(file);
 }
 
 function removeRequestUploadedImage() {
@@ -1017,6 +1209,51 @@ function removeRequestUploadedImage() {
   document.getElementById('formReqImagePreview').src = '';
   document.getElementById('formReqUploadPrompt').classList.remove('hidden');
   document.getElementById('formReqImagePreviewContainer').classList.add('hidden');
+}
+
+function toggleFormProformaSection(stageStep) {
+  const section = document.getElementById('formReqProformaSection');
+  if (!section) return;
+  if (parseInt(stageStep) === 2) {
+    section.classList.add('ring-2', 'ring-amber-400', 'bg-amber-100/40');
+  } else {
+    section.classList.remove('ring-2', 'ring-amber-400', 'bg-amber-100/40');
+  }
+}
+
+async function processFormProformaFile(file) {
+  if (!file) return;
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const result = await compressImageFile(file);
+  if (!result.base64) return;
+
+  document.getElementById('formReqProformaBase64').value = result.base64;
+  document.getElementById('formReqProformaFileName').value = file.name;
+  document.getElementById('formReqProformaFileType').value = isPdf ? 'pdf' : 'image';
+  document.getElementById('formReqProformaDispName').textContent = file.name;
+
+  const iconEl = document.getElementById('formReqProformaIcon');
+  if (iconEl) iconEl.textContent = isPdf ? 'picture_as_pdf' : 'image';
+
+  document.getElementById('formReqProformaPrompt').classList.add('hidden');
+  document.getElementById('formReqProformaPreviewContainer').classList.remove('hidden');
+  showToast(`✓ Proforma belgesi eklendi (${isPdf ? 'PDF' : 'Görsel'})`);
+}
+
+async function handleFormProformaUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  await processFormProformaFile(file);
+}
+
+function removeFormProforma() {
+  const fileInput = document.getElementById('formReqProformaFile');
+  if (fileInput) fileInput.value = '';
+  document.getElementById('formReqProformaBase64').value = '';
+  document.getElementById('formReqProformaFileName').value = '';
+  document.getElementById('formReqProformaFileType').value = '';
+  document.getElementById('formReqProformaPrompt').classList.remove('hidden');
+  document.getElementById('formReqProformaPreviewContainer').classList.add('hidden');
 }
 
 async function handleSimpleRequestSubmit(e) {
@@ -1030,7 +1267,13 @@ async function handleSimpleRequestSubmit(e) {
   const stage_label = getStageInfo(stage_step).label;
   const supply_channel = document.querySelector('input[name="formReqChannel"]:checked')?.value || 'HSG Çin';
   const notes = document.getElementById('formReqNotes').value.trim();
+  
   const chat_image = document.getElementById('formReqChatImageBase64').value || '';
+  const proforma_file = document.getElementById('formReqProformaBase64').value || '';
+  const proforma_name = document.getElementById('formReqProformaFileName').value || '';
+  const proforma_type = document.getElementById('formReqProformaFileType').value || (proforma_file.includes('application/pdf') ? 'pdf' : (proforma_file ? 'image' : ''));
+  const proforma_no = document.getElementById('formReqProformaNo').value.trim();
+  const proforma_amount = document.getElementById('formReqProformaAmount').value.trim();
 
   const created = await window.dbService.addRequest({
     company,
@@ -1043,20 +1286,37 @@ async function handleSimpleRequestSubmit(e) {
     stage_step,
     stage_label,
     notes,
-    chat_image
+    chat_image,
+    proforma_file,
+    proforma_name,
+    proforma_type,
+    proforma_no,
+    proforma_amount
   });
 
   document.getElementById('simpleRequestForm').reset();
   removeRequestUploadedImage();
+  removeFormProforma();
+  
   await loadAllData();
+  renderDashboard();
   showToast(`Talep oluşturuldu (${created.request_no} - ${supplier_name})`);
-  setTimeout(() => navigateTo('kontrol-paneli'), 500);
+  setTimeout(() => navigateTo('kontrol-paneli'), 400);
 }
 
 // ==================== 7. TALEP DETAY MODALI VE DURUM TAKİP SİSTEMİ ====================
 let currentViewingRequestId = '';
 let currentEditingRequestStage = 1;
 let currentEditingRequestImage = '';
+let currentEditingRequestProforma = {
+  file: '',
+  name: '',
+  type: '',
+  no: '',
+  amount: '',
+  notes: '',
+  date: ''
+};
 
 function openRequestDetailModal(idOrNo) {
   const req = appState.requests.find(r => r.id === idOrNo || r.request_no === idOrNo);
@@ -1065,6 +1325,15 @@ function openRequestDetailModal(idOrNo) {
   currentViewingRequestId = req.id || req.request_no;
   currentEditingRequestStage = parseInt(req.stage_step) || 1;
   currentEditingRequestImage = req.chat_image || '';
+  currentEditingRequestProforma = {
+    file: req.proforma_file || '',
+    name: req.proforma_name || '',
+    type: req.proforma_type || (req.proforma_file?.includes('application/pdf') ? 'pdf' : (req.proforma_file ? 'image' : '')),
+    no: req.proforma_no || '',
+    amount: req.proforma_amount || '',
+    notes: req.proforma_notes || '',
+    date: req.proforma_date || ''
+  };
 
   const dt = getRequestCreatedDateTimeFormatted(req);
 
@@ -1090,6 +1359,7 @@ function openRequestDetailModal(idOrNo) {
 
   renderRequestDetailSteppers();
   renderRequestDetailImage();
+  renderRequestDetailProforma();
 
   document.getElementById('requestDetailModal').classList.remove('hidden');
 }
@@ -1101,6 +1371,15 @@ function renderRequestDetailSteppers() {
   const currentStageInfo = getStageInfo(currentEditingRequestStage);
   const stageTextEl = document.getElementById('reqDetCurrentStageText');
   if (stageTextEl) stageTextEl.textContent = `Mevcut Aşama: ${currentStageInfo.label}`;
+
+  const step2Highlight = document.getElementById('reqDetStep2Highlight');
+  if (step2Highlight) {
+    if (currentEditingRequestStage === 2) {
+      step2Highlight.classList.remove('hidden');
+    } else {
+      step2Highlight.classList.add('hidden');
+    }
+  }
 
   container.innerHTML = REQUEST_STAGES.map(stage => {
     const isSelected = stage.step === currentEditingRequestStage;
@@ -1153,22 +1432,16 @@ function renderRequestDetailImage() {
   }
 }
 
-function handleRequestDetailImageUpload(event) {
+async function handleRequestDetailImageUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  if (file.size > 5 * 1024 * 1024) {
-    alert('Lütfen 5MB\'dan küçük bir görsel seçin.');
-    return;
-  }
+  const result = await compressImageFile(file);
+  if (!result.base64) return;
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    currentEditingRequestImage = e.target.result;
-    renderRequestDetailImage();
-    showToast('Yeni görsel seçildi. "Değişiklikleri Kaydet" butonuna basınız.');
-  };
-  reader.readAsDataURL(file);
+  currentEditingRequestImage = result.base64;
+  renderRequestDetailImage();
+  showToast('✓ Yeni görsel seçildi. "Değişiklikleri Kaydet" ile onaylayın.');
 }
 
 function removeRequestDetailImage() {
@@ -1177,6 +1450,112 @@ function removeRequestDetailImage() {
   if (input) input.value = '';
   renderRequestDetailImage();
   showToast('Görsel kaldırıldı. "Değişiklikleri Kaydet" ile onaylayın.');
+}
+
+function renderRequestDetailProforma() {
+  const card = document.getElementById('reqDetProformaCard');
+  const badge = document.getElementById('reqDetProformaStatusBadge');
+  const nameEl = document.getElementById('reqDetProformaName');
+  const noBadge = document.getElementById('reqDetProformaNoBadge');
+  const amtBadge = document.getElementById('reqDetProformaAmountBadge');
+  const dateBadge = document.getElementById('reqDetProformaDateBadge');
+  const btnRemove = document.getElementById('btnReqDetRemoveProforma');
+  const uploadText = document.getElementById('btnReqDetProformaUploadText');
+  const iconEl = document.getElementById('reqDetProformaTypeIcon');
+
+  const noInput = document.getElementById('reqDetProformaNoInput');
+  const amtInput = document.getElementById('reqDetProformaAmountInput');
+
+  if (currentEditingRequestProforma && currentEditingRequestProforma.file) {
+    const isPdf = currentEditingRequestProforma.type === 'pdf' || currentEditingRequestProforma.name?.toLowerCase().endsWith('.pdf') || currentEditingRequestProforma.file.includes('application/pdf');
+    
+    card.classList.remove('hidden');
+    badge.textContent = `✓ Proforma Ekli (${isPdf ? 'PDF' : 'Görsel'})`;
+    badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300';
+    
+    nameEl.textContent = currentEditingRequestProforma.name || (isPdf ? 'proforma.pdf' : 'proforma.jpg');
+    
+    if (currentEditingRequestProforma.no) {
+      noBadge.textContent = `No: ${currentEditingRequestProforma.no}`;
+      noBadge.classList.remove('hidden');
+    } else {
+      noBadge.classList.add('hidden');
+    }
+
+    if (currentEditingRequestProforma.amount) {
+      amtBadge.textContent = `Tutar: ${currentEditingRequestProforma.amount}`;
+      amtBadge.classList.remove('hidden');
+    } else {
+      amtBadge.classList.add('hidden');
+    }
+
+    dateBadge.textContent = currentEditingRequestProforma.date ? `📅 ${currentEditingRequestProforma.date}` : '';
+
+    if (iconEl) {
+      iconEl.innerHTML = isPdf 
+        ? '<span class="material-symbols-outlined text-[24px] text-red-600">picture_as_pdf</span>'
+        : '<span class="material-symbols-outlined text-[24px] text-blue-600">image</span>';
+    }
+
+    btnRemove.classList.remove('hidden');
+    if (uploadText) uploadText.textContent = 'Proformayı Değiştir';
+
+    if (noInput) noInput.value = currentEditingRequestProforma.no || '';
+    if (amtInput) amtInput.value = currentEditingRequestProforma.amount || '';
+  } else {
+    card.classList.add('hidden');
+    badge.textContent = 'Ekli Belge Yok';
+    badge.className = 'text-[11px] text-slate-400 font-normal';
+    btnRemove.classList.add('hidden');
+    if (uploadText) uploadText.textContent = 'Proforma Faturası Yükle (PDF / Görsel)';
+    if (noInput) noInput.value = '';
+    if (amtInput) amtInput.value = '';
+  }
+}
+
+async function handleRequestDetailProformaUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const result = await compressImageFile(file);
+  if (!result.base64) return;
+
+  const now = new Date();
+  const trDateFormatted = now.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const trTimeFormatted = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
+
+  const noInputVal = document.getElementById('reqDetProformaNoInput')?.value.trim() || '';
+  const amtInputVal = document.getElementById('reqDetProformaAmountInput')?.value.trim() || '';
+
+  currentEditingRequestProforma = {
+    file: result.base64,
+    name: file.name,
+    type: isPdf ? 'pdf' : 'image',
+    no: noInputVal || currentEditingRequestProforma.no || '',
+    amount: amtInputVal || currentEditingRequestProforma.amount || '',
+    notes: '',
+    date: `${trDateFormatted}, ${trTimeFormatted}`
+  };
+
+  renderRequestDetailProforma();
+  showToast('✓ Proforma belgesi seçildi. "Değişiklikleri Kaydet" butonuna basınız.');
+}
+
+function removeRequestDetailProforma() {
+  currentEditingRequestProforma = {
+    file: '',
+    name: '',
+    type: '',
+    no: '',
+    amount: '',
+    notes: '',
+    date: ''
+  };
+  const input = document.getElementById('reqDetProformaUploadInput');
+  if (input) input.value = '';
+  renderRequestDetailProforma();
+  showToast('Proforma belgesi kaldırıldı. "Değişiklikleri Kaydet" ile onaylayın.');
 }
 
 function closeRequestDetailModal() {
@@ -1188,6 +1567,14 @@ async function saveRequestDetailChanges() {
   const notes = document.getElementById('reqDetNotes').value.trim();
   const stageInfo = getStageInfo(currentEditingRequestStage);
 
+  const proformaNo = document.getElementById('reqDetProformaNoInput')?.value.trim() || '';
+  const proformaAmt = document.getElementById('reqDetProformaAmountInput')?.value.trim() || '';
+
+  if (currentEditingRequestProforma.file) {
+    currentEditingRequestProforma.no = proformaNo;
+    currentEditingRequestProforma.amount = proformaAmt;
+  }
+
   closeRequestDetailModal();
 
   await window.dbService.saveRequest({
@@ -1196,7 +1583,14 @@ async function saveRequestDetailChanges() {
     stage_step: currentEditingRequestStage,
     stage_label: stageInfo.label,
     notes: notes,
-    chat_image: currentEditingRequestImage
+    chat_image: currentEditingRequestImage,
+    proforma_file: currentEditingRequestProforma.file || '',
+    proforma_name: currentEditingRequestProforma.name || '',
+    proforma_type: currentEditingRequestProforma.type || '',
+    proforma_no: currentEditingRequestProforma.no || '',
+    proforma_amount: currentEditingRequestProforma.amount || '',
+    proforma_notes: currentEditingRequestProforma.notes || '',
+    proforma_date: currentEditingRequestProforma.date || ''
   });
 
   await loadAllData();
@@ -1221,7 +1615,153 @@ async function deleteCurrentRequest() {
   }
 }
 
-// ==================== 8. RESİM BÜYÜTME (LIGHTBOX) ====================
+// ==================== 8. PROFORMA FATURA İNCELEME & GÖRÜNTÜLEME ====================
+let currentActiveViewingProforma = null;
+
+function openProformaViewer(idOrNo) {
+  const req = appState.requests.find(r => r.id === idOrNo || r.request_no === idOrNo);
+  if (!req || !req.proforma_file) {
+    if (req) {
+      openRequestDetailModal(idOrNo);
+      showToast('Bu talebe henüz proforma eklenmemiş. Aşağıdaki alandan ekleyebilirsiniz.');
+    }
+    return;
+  }
+
+  currentActiveViewingProforma = {
+    file: req.proforma_file,
+    name: req.proforma_name || `${req.request_no}_Proforma.pdf`,
+    type: req.proforma_type || (req.proforma_file.includes('application/pdf') ? 'pdf' : 'image'),
+    no: req.proforma_no || req.request_no,
+    amount: req.proforma_amount || '',
+    supplier: req.supplier_name || 'Tedarikçi',
+    part: req.part_name || 'Parça'
+  };
+
+  displayProformaInViewerModal(currentActiveViewingProforma);
+}
+
+function openCurrentProformaViewer() {
+  if (currentEditingRequestProforma && currentEditingRequestProforma.file) {
+    const req = appState.requests.find(r => r.id === currentViewingRequestId || r.request_no === currentViewingRequestId);
+    currentActiveViewingProforma = {
+      file: currentEditingRequestProforma.file,
+      name: currentEditingRequestProforma.name || 'proforma_belgesi.pdf',
+      type: currentEditingRequestProforma.type || (currentEditingRequestProforma.file.includes('application/pdf') ? 'pdf' : 'image'),
+      no: currentEditingRequestProforma.no || document.getElementById('reqDetProformaNoInput')?.value.trim() || '-',
+      amount: currentEditingRequestProforma.amount || document.getElementById('reqDetProformaAmountInput')?.value.trim() || '',
+      supplier: req?.supplier_name || 'Tedarikçi',
+      part: req?.part_name || 'Yedek Parça'
+    };
+    displayProformaInViewerModal(currentActiveViewingProforma);
+  } else {
+    showToast('Görüntülenecek proforma dosyası bulunamadı.');
+  }
+}
+
+function displayProformaInViewerModal(prof) {
+  if (!prof || !prof.file) return;
+
+  document.getElementById('proformaModalTitle').textContent = prof.no ? `Proforma Fatura (${prof.no})` : 'Tedarikçi Proforma Faturası';
+  document.getElementById('proformaModalNo').textContent = prof.no ? `No: ${prof.no}` : '';
+  document.getElementById('proformaModalSupplier').textContent = prof.supplier;
+  document.getElementById('proformaModalPart').textContent = prof.part;
+  document.getElementById('proformaModalFileName').textContent = prof.name;
+
+  const amtWrapper = document.getElementById('proformaModalAmountWrapper');
+  const amtEl = document.getElementById('proformaModalAmount');
+  if (prof.amount) {
+    amtEl.textContent = prof.amount;
+    amtWrapper.classList.remove('hidden');
+  } else {
+    amtWrapper.classList.add('hidden');
+  }
+
+  const pdfContainer = document.getElementById('proformaPdfContainer');
+  const pdfIframe = document.getElementById('proformaPdfIframe');
+  const imgContainer = document.getElementById('proformaImageContainer');
+  const imgPreview = document.getElementById('proformaImagePreview');
+  const emptyState = document.getElementById('proformaEmptyState');
+
+  const isPdf = prof.type === 'pdf' || prof.file.includes('application/pdf') || prof.name?.toLowerCase().endsWith('.pdf');
+
+  if (isPdf) {
+    pdfIframe.src = prof.file;
+    pdfContainer.classList.remove('hidden');
+    imgContainer.classList.add('hidden');
+    emptyState.classList.add('hidden');
+  } else {
+    imgPreview.src = prof.file;
+    imgContainer.classList.remove('hidden');
+    pdfContainer.classList.add('hidden');
+    emptyState.classList.add('hidden');
+  }
+
+  document.getElementById('proformaViewerModal').classList.remove('hidden');
+}
+
+function closeProformaViewer() {
+  const modal = document.getElementById('proformaViewerModal');
+  if (modal) modal.classList.add('hidden');
+  const iframe = document.getElementById('proformaPdfIframe');
+  if (iframe) iframe.src = '';
+  currentActiveViewingProforma = null;
+}
+
+function downloadCurrentProformaFromViewer() {
+  if (currentActiveViewingProforma && currentActiveViewingProforma.file) {
+    triggerFileDownload(currentActiveViewingProforma.file, currentActiveViewingProforma.name || 'proforma_fatura.pdf');
+  }
+}
+
+function downloadCurrentProforma() {
+  if (currentEditingRequestProforma && currentEditingRequestProforma.file) {
+    triggerFileDownload(currentEditingRequestProforma.file, currentEditingRequestProforma.name || 'proforma_fatura.pdf');
+  } else {
+    showToast('İndirilecek proforma dosyası bulunamadı.');
+  }
+}
+
+function triggerFileDownload(dataUrl, filename) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename || 'proforma_belgesi.pdf';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast(`📥 "${filename}" indiriliyor...`);
+}
+
+function printCurrentProforma() {
+  if (!currentActiveViewingProforma) return;
+  const isPdf = currentActiveViewingProforma.type === 'pdf' || currentActiveViewingProforma.file.includes('application/pdf');
+  
+  if (isPdf) {
+    const iframe = document.getElementById('proformaPdfIframe');
+    if (iframe && iframe.contentWindow) {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        return;
+      } catch (e) {}
+    }
+  }
+
+  const win = window.open('', '_blank');
+  if (win) {
+    win.document.write(`
+      <html>
+        <head><title>${currentActiveViewingProforma.name}</title></head>
+        <body style="margin:0; display:flex; justify-content:center; align-items:center; min-height:100vh;">
+          ${isPdf ? `<iframe src="${currentActiveViewingProforma.file}" style="width:100%; height:100vh; border:none;"></iframe>` : `<img src="${currentActiveViewingProforma.file}" style="max-width:100%; height:auto;" onload="window.print();"/>`}
+        </body>
+      </html>
+    `);
+    win.document.close();
+  }
+}
+
+// ==================== 9. RESİM BÜYÜTME (LIGHTBOX) ====================
 function openImageLightbox(src) {
   if (!src) return;
   document.getElementById('lightboxImage').src = src;
