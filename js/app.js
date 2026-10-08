@@ -19,6 +19,168 @@ function showToast(message) {
   setTimeout(() => toast.remove(), 3000);
 }
 
+// ==================== KİMLİK DOĞRULAMA (AUTH) YAPISI ====================
+const AUTH_CONFIG = {
+  REQUIRED_EMAIL: 'leyla.kaplan@suntonmakina.com',
+  REQUIRED_PASS: 'Leyla2026',
+  USER_PROFILE: {
+    fullName: 'Leyla Kaplan',
+    email: 'leyla.kaplan@suntonmakina.com',
+    role: 'Yedek Parça & Tedarik Yöneticisi',
+    title: 'Tedarik Yöneticisi',
+    avatar: 'LK',
+    company: 'Sunton & HSG'
+  }
+};
+
+function getAuthenticatedUser() {
+  try {
+    const raw = localStorage.getItem('sunton_portal_auth_user');
+    if (!raw) return null;
+    const user = JSON.parse(raw);
+    if (user && user.email && user.email.toLowerCase() === AUTH_CONFIG.REQUIRED_EMAIL.toLowerCase()) {
+      return user;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function updateHeaderUserInfo(user) {
+  const avatarEl = document.getElementById('headerUserAvatar');
+  const nameEl = document.getElementById('headerUserName');
+  const roleEl = document.getElementById('headerUserRole');
+  if (avatarEl) avatarEl.textContent = user.avatar || 'LK';
+  if (nameEl) nameEl.textContent = user.fullName || 'Leyla Kaplan';
+  if (roleEl) roleEl.textContent = user.title || 'Tedarik Yöneticisi';
+}
+
+function checkAuthAndRender() {
+  const user = getAuthenticatedUser();
+  const authScreen = document.getElementById('authLoginScreen');
+  const appWrapper = document.getElementById('appMainWrapper');
+
+  if (!user) {
+    // Giriş yapılmamış: Giriş ekranını göster, ana paneli gizle
+    if (authScreen) {
+      authScreen.classList.remove('hidden');
+      authScreen.classList.add('flex');
+    }
+    if (appWrapper) {
+      appWrapper.classList.add('hidden');
+    }
+    return false;
+  } else {
+    // Giriş yapılmış: Giriş ekranını gizle, ana paneli aç
+    if (authScreen) {
+      authScreen.classList.add('hidden');
+      authScreen.classList.remove('flex');
+    }
+    if (appWrapper) {
+      appWrapper.classList.remove('hidden');
+    }
+    updateHeaderUserInfo(user);
+    return true;
+  }
+}
+
+function togglePasswordVisibility() {
+  const passInput = document.getElementById('loginPassword');
+  const icon = document.getElementById('passwordToggleIcon');
+  if (!passInput || !icon) return;
+  if (passInput.type === 'password') {
+    passInput.type = 'text';
+    icon.textContent = 'visibility_off';
+  } else {
+    passInput.type = 'password';
+    icon.textContent = 'visibility';
+  }
+}
+
+function fillDemoCredentials() {
+  const emailInput = document.getElementById('loginEmail');
+  const passInput = document.getElementById('loginPassword');
+  if (emailInput) emailInput.value = AUTH_CONFIG.REQUIRED_EMAIL;
+  if (passInput) passInput.value = AUTH_CONFIG.REQUIRED_PASS;
+  showToast('Giriş bilgileri form alanlarına dolduruldu.');
+}
+
+async function handleLoginSubmit(event) {
+  if (event) event.preventDefault();
+
+  const emailInput = document.getElementById('loginEmail');
+  const passInput = document.getElementById('loginPassword');
+  const errorAlert = document.getElementById('authErrorAlert');
+  const successAlert = document.getElementById('authSuccessAlert');
+  const errorMsg = document.getElementById('authErrorMessage');
+  const btnSubmit = document.getElementById('btnLoginSubmit');
+  const btnText = document.getElementById('btnLoginText');
+
+  const emailVal = (emailInput?.value || '').trim().toLowerCase();
+  const passVal = passInput?.value || '';
+
+  // Önceki hata durumunu temizle
+  if (errorAlert) {
+    errorAlert.classList.add('hidden');
+    errorAlert.classList.remove('animate-shake');
+  }
+
+  // Bilgileri Doğrula
+  if (emailVal === AUTH_CONFIG.REQUIRED_EMAIL.toLowerCase() && passVal === AUTH_CONFIG.REQUIRED_PASS) {
+    // Başarılı Giriş
+    if (successAlert) successAlert.classList.remove('hidden');
+    if (btnSubmit) btnSubmit.disabled = true;
+    if (btnText) btnText.textContent = 'Giriş Yapılıyor...';
+
+    const sessionData = {
+      ...AUTH_CONFIG.USER_PROFILE,
+      loginAt: new Date().toISOString()
+    };
+
+    localStorage.setItem('sunton_portal_auth_user', JSON.stringify(sessionData));
+
+    setTimeout(async () => {
+      if (successAlert) successAlert.classList.add('hidden');
+      if (btnSubmit) btnSubmit.disabled = false;
+      if (btnText) btnText.textContent = 'Giriş Yap';
+      
+      checkAuthAndRender();
+      await loadAllData();
+      const hash = window.location.hash.replace('#', '') || 'kontrol-paneli';
+      navigateTo(hash);
+      showToast(`Hoş geldiniz, ${AUTH_CONFIG.USER_PROFILE.fullName}!`);
+    }, 450);
+
+  } else {
+    // Hatalı Giriş
+    if (errorAlert) {
+      errorAlert.classList.remove('hidden');
+      void errorAlert.offsetWidth; // Reflow tetikle
+      errorAlert.classList.add('animate-shake');
+      if (errorMsg) {
+        if (emailVal !== AUTH_CONFIG.REQUIRED_EMAIL.toLowerCase()) {
+          errorMsg.textContent = 'Bu e-posta adresiyle yetkili kullanıcı kaydı bulunamadı.';
+        } else {
+          errorMsg.textContent = 'Girdiğiniz şifre hatalı! Lütfen bilgilerinizi kontrol edin.';
+        }
+      }
+    }
+    if (passInput) {
+      passInput.focus();
+      passInput.select();
+    }
+  }
+}
+
+function handleLogout() {
+  if (confirm('Sunton & HSG Portalı oturumunuzu kapatmak istediğinize emin misiniz?')) {
+    localStorage.removeItem('sunton_portal_auth_user');
+    checkAuthAndRender();
+    showToast('Oturum güvenli bir şekilde kapatıldı.');
+  }
+}
+
 // Global Uygulama Durumu
 const appState = {
   currentPath: 'kontrol-paneli',
@@ -33,9 +195,13 @@ const appState = {
 document.addEventListener('DOMContentLoaded', async () => {
   setupNavigation();
   setupDragAndDropAndPasteListeners();
-  await loadAllData();
-  const hash = window.location.hash.replace('#', '') || 'kontrol-paneli';
-  navigateTo(hash);
+  
+  const isAuth = checkAuthAndRender();
+  if (isAuth) {
+    await loadAllData();
+    const hash = window.location.hash.replace('#', '') || 'kontrol-paneli';
+    navigateTo(hash);
+  }
 });
 
 // Veri Yükleme
@@ -65,12 +231,21 @@ function populateSupplierDropdowns() {
 // Gezinme & Yönlendirme (Router)
 function setupNavigation() {
   window.addEventListener('hashchange', () => {
+    if (!getAuthenticatedUser()) {
+      checkAuthAndRender();
+      return;
+    }
     const hash = window.location.hash.replace('#', '') || 'kontrol-paneli';
     navigateTo(hash);
   });
 }
 
 function navigateTo(path) {
+  if (!getAuthenticatedUser()) {
+    checkAuthAndRender();
+    return;
+  }
+
   appState.currentPath = path;
   window.location.hash = path;
 

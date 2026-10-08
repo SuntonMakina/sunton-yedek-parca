@@ -83,3 +83,22 @@
 #imageLightboxModal {
   z-index: 9995 !important;
 }
+
+/* Giriş Ekranı & Kimlik Doğrulama Stilleri */
+.auth-bg-grid {
+  background-size: 36px 36px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+}
+
+@keyframes authShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.animate-shake {
+  animation: authShake 0.4s ease-in-out;
+}
+

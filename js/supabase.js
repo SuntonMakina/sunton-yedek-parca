@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   SUPABASE_URL: 'sunton_supabase_url',
   SUPABASE_KEY: 'sunton_supabase_anon_key',
   USE_LIVE_SUPABASE: 'sunton_use_live_db',
+  AUTH_USER: 'sunton_portal_auth_user',
   INVENTORY: 'sunton_inventory_data',
   SHIPMENTS: 'sunton_shipments_data',
   REQUESTS: 'sunton_requests_data',
