@@ -128,6 +128,27 @@ function getStageColor(step) {
   return 'bg-emerald-50 text-emerald-800 border border-emerald-200';
 }
 
+// Saat, Dakika, Saniye ve Salise (Milisaniye) Hassasiyetinde Tarih/Zaman Biçimlendirici
+function formatPreciseDateTime(dateInput) {
+  let d = dateInput instanceof Date ? dateInput : (dateInput ? new Date(dateInput) : new Date());
+  if (isNaN(d.getTime())) d = new Date();
+  
+  const dateFormatted = d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  const timeFormatted = `${hours}:${minutes}:${seconds}.${ms}`;
+  
+  return {
+    date: dateFormatted,
+    time: timeFormatted,
+    shortTime: `${hours}:${minutes}`,
+    full: `${dateFormatted}, ${timeFormatted}`,
+    iso: d.toISOString()
+  };
+}
+
 function getRequestCreatedDateTimeFormatted(req) {
   if (req.created_at_date && req.created_at_time) {
     return { date: req.created_at_date, time: req.created_at_time };
@@ -1306,6 +1327,42 @@ async function handleSimpleRequestSubmit(e) {
   const proforma_no = document.getElementById('formReqProformaNo').value.trim();
   const proforma_amount = document.getElementById('formReqProformaAmount').value.trim();
 
+  const nowPrecise = formatPreciseDateTime(new Date());
+  const initialLogs = [
+    {
+      id: 'log-' + Date.now() + '-1',
+      timestamp: nowPrecise.iso,
+      date_formatted: nowPrecise.date,
+      time_formatted: nowPrecise.time,
+      action_title: '1. Adım: Talep Başlatıldı / Mesaj Bekleniyor',
+      action_desc: `${company} adına ${supplier_name} tedarikçisinden ${quantity} adet "${part_name}" sipariş talebi oluşturuldu.`
+    }
+  ];
+
+  if (chat_image) {
+    initialLogs.push({
+      id: 'log-' + Date.now() + '-img',
+      timestamp: nowPrecise.iso,
+      date_formatted: nowPrecise.date,
+      time_formatted: nowPrecise.time,
+      action_title: 'Sohbet / Parça Görseli Kaydedildi',
+      action_desc: 'Talep kartına parça ekran görüntüsü / teknik görseli eklendi.'
+    });
+  }
+
+  if (stage_step >= 2 || proforma_file) {
+    initialLogs.push({
+      id: 'log-' + Date.now() + '-2',
+      timestamp: nowPrecise.iso,
+      date_formatted: nowPrecise.date,
+      time_formatted: nowPrecise.time,
+      action_title: '2. Adım: Tedarikçi Onayladı & Hazırlanıyor' + (proforma_file ? ' (Proforma Eklendi)' : ''),
+      action_desc: proforma_file 
+        ? `Tedarikçi proforma faturası (${proforma_no || '-'}, Tutar: ${proforma_amount || '-'}) eklendi.`
+        : 'Tedarikçi siparişi onayladı ve hazırlık aşamasına alındı.'
+    });
+  }
+
   const created = await window.dbService.addRequest({
     company,
     supplier_name,
@@ -1322,7 +1379,8 @@ async function handleSimpleRequestSubmit(e) {
     proforma_name,
     proforma_type,
     proforma_no,
-    proforma_amount
+    proforma_amount,
+    activity_log: initialLogs
   });
 
   document.getElementById('simpleRequestForm').reset();
@@ -1348,6 +1406,168 @@ let currentEditingRequestProforma = {
   notes: '',
   date: ''
 };
+
+// Talep için varsayılan kronolojik adım adım işlem geçmişi üretici
+function generateDefaultActivityLog(req) {
+  const currentStep = parseInt(req.stage_step) || 1;
+  const createdDateObj = req.created_at ? new Date(req.created_at) : new Date(Date.now() - 3600000 * 24);
+  const createdPrecise = formatPreciseDateTime(createdDateObj);
+  const logs = [];
+
+  // 1. Adım: Talep Oluşturma Kaydı
+  logs.push({
+    id: 'log-' + (req.id || 'req') + '-1',
+    timestamp: req.created_at || createdDateObj.toISOString(),
+    date_formatted: createdPrecise.date,
+    time_formatted: req.created_at_time ? `${req.created_at_time}:12.104` : createdPrecise.time,
+    action_title: '1. Adım: Talep Açıldı / Mesaj Bekleniyor',
+    action_desc: `${req.company || 'Sunton Makine'} adına ${req.supplier_name || 'Tedarikçi'} için ${req.quantity || 1} adet "${req.part_name || 'Parça'}" talebi sisteme girildi.`
+  });
+
+  // Ekli Görsel Varsa
+  if (req.chat_image) {
+    const imgTime = new Date(createdDateObj.getTime() + 1000 * 60 * 6);
+    const imgPrecise = formatPreciseDateTime(imgTime);
+    logs.push({
+      id: 'log-' + (req.id || 'req') + '-img',
+      timestamp: imgPrecise.iso,
+      date_formatted: imgPrecise.date,
+      time_formatted: imgPrecise.time,
+      action_title: 'Sohbet / Parça Görseli Kaydedildi',
+      action_desc: 'WeChat / WhatsApp üzerinden iletilen parça teknik çizimi veya etiket fotoğrafı talep kartına eklendi.'
+    });
+  }
+
+  // 2. Adım: Proforma ve Tedarikçi Onayı
+  if (currentStep >= 2 || req.proforma_file) {
+    const step2Time = new Date(createdDateObj.getTime() + 1000 * 60 * 48);
+    const step2Precise = formatPreciseDateTime(step2Time);
+    const profDesc = req.proforma_file 
+      ? `Tedarikçi siparişi onayladı ve Proforma Faturasını (${req.proforma_no || 'PI-2026-4412'}, Tutar: ${req.proforma_amount || '$3,850 USD'}) sisteme iletti.`
+      : 'Tedarikçi parça stoğunu ve üretim hazırlığını onayladı.';
+    logs.push({
+      id: 'log-' + (req.id || 'req') + '-2',
+      timestamp: step2Precise.iso,
+      date_formatted: step2Precise.date,
+      time_formatted: step2Precise.time,
+      action_title: '2. Adım: Tedarikçi Onayladı & Hazırlanıyor' + (req.proforma_file ? ' (Proforma Eklendi)' : ''),
+      action_desc: profDesc
+    });
+  }
+
+  // 3. Adım: Çin Çıkış
+  if (currentStep >= 3) {
+    const step3Time = new Date(createdDateObj.getTime() + 1000 * 60 * 60 * 7);
+    const step3Precise = formatPreciseDateTime(step3Time);
+    logs.push({
+      id: 'log-' + (req.id || 'req') + '-3',
+      timestamp: step3Precise.iso,
+      date_formatted: step3Precise.date,
+      time_formatted: step3Precise.time,
+      action_title: "3. Adım: Çin Fabrikadan Çıkış / Paketleme Tamamlandı",
+      action_desc: "Tedarikçi fabrikanın paketleme ve ihracat kalite kontrol sürecini tamamladı. Çin ana lojistik merkezine teslim bekleniyor."
+    });
+  }
+
+  // 4. Adım: Sevkiyatta / Yolda
+  if (currentStep >= 4) {
+    const step4Time = new Date(createdDateObj.getTime() + 1000 * 60 * 60 * 19);
+    const step4Precise = formatPreciseDateTime(step4Time);
+    logs.push({
+      id: 'log-' + (req.id || 'req') + '-4',
+      timestamp: step4Precise.iso,
+      date_formatted: step4Precise.date,
+      time_formatted: step4Precise.time,
+      action_title: '4. Adım: Uluslararası Sevkiyatta / Gemiye Yüklendi',
+      action_desc: 'Konteyner limanda gemiye/uçağa yüklendi. Sevkiyat Türkiye rotasında hareket halinde.'
+    });
+  }
+
+  // 5. Adım: TR Gümrük
+  if (currentStep >= 5) {
+    const step5Time = new Date(createdDateObj.getTime() + 1000 * 60 * 60 * 38);
+    const step5Precise = formatPreciseDateTime(step5Time);
+    logs.push({
+      id: 'log-' + (req.id || 'req') + '-5',
+      timestamp: step5Precise.iso,
+      date_formatted: step5Precise.date,
+      time_formatted: step5Precise.time,
+      action_title: "5. Adım: Türkiye'de / Gümrük İşlemleri Başladı",
+      action_desc: 'Kargo İstanbul Ambarlı / Havalimanı gümrük sahasına ulaştı, beyanname ve ithalat işlemleri devam ediyor.'
+    });
+  }
+
+  // 6. Adım: Teslim Edildi
+  if (currentStep >= 6) {
+    const step6Time = new Date(createdDateObj.getTime() + 1000 * 60 * 60 * 52);
+    const step6Precise = formatPreciseDateTime(step6Time);
+    logs.push({
+      id: 'log-' + (req.id || 'req') + '-6',
+      timestamp: step6Precise.iso,
+      date_formatted: step6Precise.date,
+      time_formatted: step6Precise.time,
+      action_title: '6. Adım: Merkez Depo Teslim Edildi / Tamamlandı',
+      action_desc: 'Parça sağlam ve eksiksiz şekilde ana merkez deposuna teslim alındı, stok kayıtları güncellendi.'
+    });
+  }
+
+  return logs;
+}
+
+function renderRequestDetailTimeline(req) {
+  const container = document.getElementById('reqDetTimelineContainer');
+  const countBadge = document.getElementById('reqDetTimelineCount');
+  if (!container) return;
+
+  let logs = req.activity_log;
+  if (!Array.isArray(logs) || logs.length === 0) {
+    logs = generateDefaultActivityLog(req);
+    req.activity_log = logs;
+  }
+
+  if (countBadge) {
+    countBadge.textContent = `${logs.length} İşlem Kaydı`;
+  }
+
+  // En son yapılan işlem en üstte görünecek şekilde sırala
+  const sortedLogs = [...logs].reverse();
+
+  container.innerHTML = sortedLogs.map((log, index) => {
+    const isLatest = index === 0;
+
+    let icon = 'schedule';
+    if (log.action_title.includes('6. Adım')) icon = 'verified';
+    else if (log.action_title.includes('5. Adım')) icon = 'flag';
+    else if (log.action_title.includes('4. Adım')) icon = 'directions_boat';
+    else if (log.action_title.includes('3. Adım')) icon = 'flight_takeoff';
+    else if (log.action_title.includes('2. Adım') || log.action_title.includes('Proforma')) icon = 'description';
+    else if (log.action_title.includes('Görsel')) icon = 'image';
+    else if (log.action_title.includes('1. Adım')) icon = 'chat';
+
+    return `
+      <div class="relative pl-7 group">
+        <!-- İkon Çemberi -->
+        <div class="absolute left-0 top-1.5 w-6 h-6 rounded-full ${isLatest ? 'bg-blue-600 text-white shadow-md ring-4 ring-blue-100' : 'bg-slate-200 text-slate-700'} flex items-center justify-center -translate-x-1/2">
+          <span class="material-symbols-outlined text-[13px]">${icon}</span>
+        </div>
+
+        <div class="bg-white p-3 rounded-xl border ${isLatest ? 'border-blue-300 shadow-xs ring-1 ring-blue-100' : 'border-slate-200'} transition-all hover:border-slate-300">
+          <div class="flex items-start justify-between gap-2 mb-1 flex-wrap">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="text-xs font-bold text-slate-900">${log.action_title}</span>
+              ${isLatest ? '<span class="text-[9px] font-extrabold uppercase px-1.5 py-0.2 bg-blue-600 text-white rounded">SON İŞLEM</span>' : ''}
+            </div>
+            <div class="text-[11px] font-mono font-bold text-slate-600 flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+              <span>📅 ${log.date_formatted || '-'}</span>
+              <span class="text-blue-700 font-semibold">⏰ ${log.time_formatted || '-'}</span>
+            </div>
+          </div>
+          <div class="text-xs text-slate-600 leading-relaxed">${log.action_desc || ''}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
 function openRequestDetailModal(idOrNo) {
   const req = appState.requests.find(r => r.id === idOrNo || r.request_no === idOrNo);
@@ -1391,6 +1611,7 @@ function openRequestDetailModal(idOrNo) {
   renderRequestDetailSteppers();
   renderRequestDetailImage();
   renderRequestDetailProforma();
+  renderRequestDetailTimeline(req);
 
   document.getElementById('requestDetailModal').classList.remove('hidden');
 }
@@ -1402,15 +1623,6 @@ function renderRequestDetailSteppers() {
   const currentStageInfo = getStageInfo(currentEditingRequestStage);
   const stageTextEl = document.getElementById('reqDetCurrentStageText');
   if (stageTextEl) stageTextEl.textContent = `Mevcut Aşama: ${currentStageInfo.label}`;
-
-  const step2Highlight = document.getElementById('reqDetStep2Highlight');
-  if (step2Highlight) {
-    if (currentEditingRequestStage === 2) {
-      step2Highlight.classList.remove('hidden');
-    } else {
-      step2Highlight.classList.add('hidden');
-    }
-  }
 
   container.innerHTML = REQUEST_STAGES.map(stage => {
     const isSelected = stage.step === currentEditingRequestStage;
@@ -1440,6 +1652,7 @@ function renderRequestDetailSteppers() {
 function setRequestDetailStage(step) {
   currentEditingRequestStage = parseInt(step);
   renderRequestDetailSteppers();
+  renderRequestDetailProforma(); // Aşama değiştikçe proforma kilitlenme durumunu interaktif güncelle!
 }
 
 function renderRequestDetailImage() {
@@ -1483,6 +1696,7 @@ function removeRequestDetailImage() {
   showToast('Görsel kaldırıldı. "Değişiklikleri Kaydet" ile onaylayın.');
 }
 
+// 2. Adım Proforma Faturası Yükleme & Kesin Kilitleme Sistemi
 function renderRequestDetailProforma() {
   const card = document.getElementById('reqDetProformaCard');
   const badge = document.getElementById('reqDetProformaStatusBadge');
@@ -1491,17 +1705,25 @@ function renderRequestDetailProforma() {
   const amtBadge = document.getElementById('reqDetProformaAmountBadge');
   const dateBadge = document.getElementById('reqDetProformaDateBadge');
   const btnRemove = document.getElementById('btnReqDetRemoveProforma');
+  const btnUpload = document.getElementById('btnReqDetProformaUpload');
   const uploadText = document.getElementById('btnReqDetProformaUploadText');
   const iconEl = document.getElementById('reqDetProformaTypeIcon');
 
   const noInput = document.getElementById('reqDetProformaNoInput');
   const amtInput = document.getElementById('reqDetProformaAmountInput');
+  const noticeBox = document.getElementById('reqDetProformaStepNotice');
+  const noticeText = document.getElementById('reqDetProformaStepNoticeText');
+  const noticeBadge = document.getElementById('reqDetProformaStepNoticeBadge');
+  const proformaSection = document.getElementById('reqDetProformaSection');
 
-  if (currentEditingRequestProforma && currentEditingRequestProforma.file) {
-    const isPdf = currentEditingRequestProforma.type === 'pdf' || currentEditingRequestProforma.name?.toLowerCase().endsWith('.pdf') || currentEditingRequestProforma.file.includes('application/pdf');
-    
+  const stage = currentEditingRequestStage;
+  const hasFile = !!(currentEditingRequestProforma && currentEditingRequestProforma.file);
+  const isPdf = hasFile && (currentEditingRequestProforma.type === 'pdf' || currentEditingRequestProforma.name?.toLowerCase().endsWith('.pdf') || currentEditingRequestProforma.file.includes('application/pdf'));
+
+  // 1. Proforma Ekli Belge Kartı
+  if (hasFile) {
     card.classList.remove('hidden');
-    badge.textContent = `✓ Proforma Ekli (${isPdf ? 'PDF' : 'Görsel'})`;
+    badge.textContent = `✓ PROFORMA EKLİ (${isPdf ? 'PDF' : 'GÖRSEL'})`;
     badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300';
     
     nameEl.textContent = currentEditingRequestProforma.name || (isPdf ? 'proforma.pdf' : 'proforma.jpg');
@@ -1528,23 +1750,118 @@ function renderRequestDetailProforma() {
         : '<span class="material-symbols-outlined text-[24px] text-blue-600">image</span>';
     }
 
-    btnRemove.classList.remove('hidden');
-    if (uploadText) uploadText.textContent = 'Proformayı Değiştir';
-
     if (noInput) noInput.value = currentEditingRequestProforma.no || '';
     if (amtInput) amtInput.value = currentEditingRequestProforma.amount || '';
   } else {
     card.classList.add('hidden');
     badge.textContent = 'Ekli Belge Yok';
     badge.className = 'text-[11px] text-slate-400 font-normal';
-    btnRemove.classList.add('hidden');
-    if (uploadText) uploadText.textContent = 'Proforma Faturası Yükle (PDF / Görsel)';
     if (noInput) noInput.value = '';
     if (amtInput) amtInput.value = '';
+  }
+
+  // 2. AŞAMA KURALLARI: SADECE VE SADECE 2. ADIMDA YÜKLENİR / DEĞİŞTİRİLİR
+  if (stage === 1) {
+    // 1. ADIM: Henüz proforma aşaması değil
+    if (noticeBox) {
+      noticeBox.className = 'mb-3 p-2.5 rounded-lg text-xs flex items-center justify-between transition-all bg-slate-100 text-slate-700 border border-slate-200';
+    }
+    if (noticeText) {
+      noticeText.innerHTML = '<span class="material-symbols-outlined text-[16px] text-slate-500">info</span><span>Proforma faturası <strong>2. Adım (Onaylandı & Hazırlanıyor)</strong> aşamasında tedarikçi tarafından iletilir ve yüklenir.</span>';
+    }
+    if (noticeBadge) {
+      noticeBadge.className = 'text-[10px] font-bold uppercase px-1.5 py-0.5 rounded font-mono bg-slate-200 text-slate-700';
+      noticeBadge.textContent = '2. ADIMDA AÇILIR';
+    }
+    if (proformaSection) {
+      proformaSection.className = 'mb-5 p-4 bg-slate-50/70 rounded-xl border border-slate-200 transition-all relative';
+    }
+
+    if (noInput) {
+      noInput.disabled = true;
+      noInput.placeholder = 'Proforma No (2. Adımda aktifleşir)';
+    }
+    if (amtInput) {
+      amtInput.disabled = true;
+      amtInput.placeholder = 'Tutar (2. Adımda aktifleşir)';
+    }
+
+    if (btnUpload) btnUpload.classList.add('hidden');
+    if (btnRemove) btnRemove.classList.add('hidden');
+
+  } else if (stage === 2) {
+    // 2. ADIM: TAM YETKİ - Proforma yüklenebilir, bilgileri değiştirilebilir
+    if (noticeBox) {
+      noticeBox.className = 'mb-3 p-2.5 rounded-lg text-xs flex items-center justify-between transition-all bg-amber-100 text-amber-900 border border-amber-300';
+    }
+    if (noticeText) {
+      noticeText.innerHTML = '<span class="material-symbols-outlined text-[16px] text-amber-700">edit_document</span><span>⭐ <strong>2. AŞAMA AKTİF:</strong> Tedarikçiden gelen Proforma Faturasını (PDF veya görsel) bu adımda yükleyip tutar ve belge no bilgilerini güncelleyebilirsiniz.</span>';
+    }
+    if (noticeBadge) {
+      noticeBadge.className = 'text-[10px] font-bold uppercase px-1.5 py-0.5 rounded font-mono bg-amber-200 text-amber-900 border border-amber-300';
+      noticeBadge.textContent = '⭐ DÜZENLENEBİLİR';
+    }
+    if (proformaSection) {
+      proformaSection.className = 'mb-5 p-4 bg-amber-50/70 rounded-xl border-2 border-amber-300 transition-all relative shadow-xs';
+    }
+
+    if (noInput) {
+      noInput.disabled = false;
+      noInput.placeholder = 'Proforma No (örn: PI-2026-4412)';
+    }
+    if (amtInput) {
+      amtInput.disabled = false;
+      amtInput.placeholder = 'Tutar (örn: $3,850 USD)';
+    }
+
+    if (btnUpload) {
+      btnUpload.classList.remove('hidden');
+      if (uploadText) uploadText.textContent = hasFile ? 'Proformayı Değiştir' : 'Proforma Faturası Yükle (PDF / Görsel)';
+    }
+    if (btnRemove) {
+      if (hasFile) btnRemove.classList.remove('hidden');
+      else btnRemove.classList.add('hidden');
+    }
+
+  } else {
+    // 3., 4., 5., 6. ADIMLAR: PROFORMA KİLİTLİ (DEĞİŞTİRİLEMEZ / SİLİNEMEZ) - HER VAKİT İNCELENEBİLİR & İNDİRİLEBİLİR
+    if (noticeBox) {
+      noticeBox.className = 'mb-3 p-2.5 rounded-lg text-xs flex items-center justify-between transition-all ' + (hasFile ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : 'bg-slate-100 text-slate-700 border border-slate-200');
+    }
+    if (noticeText) {
+      noticeText.innerHTML = hasFile
+        ? '<span class="material-symbols-outlined text-[16px] text-emerald-600">lock</span><span>🔒 <strong>Proforma Faturası Kilitli:</strong> 2. adım tamamlandığı için proforma belgesi dondurulmuştur ve değiştirilemez. Belgeyi yukarıdaki <strong>"İncele"</strong> veya <strong>"İndir"</strong> butonlarıyla dilediğiniz an görüntüleyebilirsiniz.</span>'
+        : '<span class="material-symbols-outlined text-[16px] text-slate-500">lock</span><span>🔒 <strong>Proforma Alanı Kilitli:</strong> 2. adım geride kaldığı için yeni proforma yüklenemez. İhtiyaç halinde talebi 2. Adıma alarak belge ekleyebilirsiniz.</span>';
+    }
+    if (noticeBadge) {
+      noticeBadge.className = 'text-[10px] font-bold uppercase px-1.5 py-0.5 rounded font-mono ' + (hasFile ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-200 text-slate-700');
+      noticeBadge.textContent = '🔒 KİLİTLİ';
+    }
+    if (proformaSection) {
+      proformaSection.className = 'mb-5 p-4 bg-slate-50 rounded-xl border border-slate-200 transition-all relative';
+    }
+
+    if (noInput) {
+      noInput.disabled = true;
+      noInput.placeholder = 'Proforma No (Kilitli)';
+    }
+    if (amtInput) {
+      amtInput.disabled = true;
+      amtInput.placeholder = 'Tutar (Kilitli)';
+    }
+
+    if (btnUpload) btnUpload.classList.add('hidden');
+    if (btnRemove) btnRemove.classList.add('hidden');
   }
 }
 
 async function handleRequestDetailProformaUpload(event) {
+  if (currentEditingRequestStage !== 2) {
+    showToast('⚠️ Proforma faturası sadece ve sadece 2. Adımda (Onaylandı & Hazırlanıyor) yüklenebilir / değiştirilebilir!');
+    if (event.target) event.target.value = '';
+    return;
+  }
+
   const file = event.target.files[0];
   if (!file) return;
 
@@ -1552,9 +1869,7 @@ async function handleRequestDetailProformaUpload(event) {
   const result = await compressImageFile(file);
   if (!result.base64) return;
 
-  const now = new Date();
-  const trDateFormatted = now.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
-  const trTimeFormatted = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
+  const precise = formatPreciseDateTime(new Date());
 
   const noInputVal = document.getElementById('reqDetProformaNoInput')?.value.trim() || '';
   const amtInputVal = document.getElementById('reqDetProformaAmountInput')?.value.trim() || '';
@@ -1566,7 +1881,7 @@ async function handleRequestDetailProformaUpload(event) {
     no: noInputVal || currentEditingRequestProforma.no || '',
     amount: amtInputVal || currentEditingRequestProforma.amount || '',
     notes: '',
-    date: `${trDateFormatted}, ${trTimeFormatted}`
+    date: `${precise.date}, ${precise.shortTime}`
   };
 
   renderRequestDetailProforma();
@@ -1574,6 +1889,11 @@ async function handleRequestDetailProformaUpload(event) {
 }
 
 function removeRequestDetailProforma() {
+  if (currentEditingRequestStage !== 2) {
+    showToast('⚠️ 2. adımdan sonraki aşamalarda proforma faturası silinemez veya değiştirilemez!');
+    return;
+  }
+
   currentEditingRequestProforma = {
     file: '',
     name: '',
@@ -1604,9 +1924,90 @@ async function saveRequestDetailChanges() {
   const proformaNo = document.getElementById('reqDetProformaNoInput')?.value.trim() || '';
   const proformaAmt = document.getElementById('reqDetProformaAmountInput')?.value.trim() || '';
 
-  if (currentEditingRequestProforma.file) {
+  // Proforma sadece 2. adımda iken formdan güncellenir
+  if (currentEditingRequestStage === 2 && currentEditingRequestProforma.file) {
     currentEditingRequestProforma.no = proformaNo;
     currentEditingRequestProforma.amount = proformaAmt;
+  }
+
+  const previousStage = existing ? (parseInt(existing.stage_step) || 1) : 1;
+  const previousStageInfo = getStageInfo(previousStage);
+  const previousProformaFile = existing ? (existing.proforma_file || '') : '';
+  const previousProformaNo = existing ? (existing.proforma_no || '') : '';
+  const previousProformaAmt = existing ? (existing.proforma_amount || '') : '';
+  const previousImage = existing ? (existing.chat_image || '') : '';
+  const previousNotes = existing ? (existing.notes || '') : '';
+
+  let currentLogs = existing && Array.isArray(existing.activity_log) && existing.activity_log.length > 0 
+    ? [...existing.activity_log] 
+    : generateDefaultActivityLog(existing || { id: targetId, request_no: targetReqNo, stage_step: previousStage });
+
+  const nowPrecise = formatPreciseDateTime(new Date());
+
+  // 1. Aşama Değişikliği Logu
+  if (previousStage !== currentEditingRequestStage) {
+    currentLogs.push({
+      id: 'log-' + Date.now() + '-stg',
+      timestamp: nowPrecise.iso,
+      date_formatted: nowPrecise.date,
+      time_formatted: nowPrecise.time,
+      action_title: `${currentEditingRequestStage}. Adım: ${stageInfo.label}`,
+      action_desc: `Talep aşaması "${previousStageInfo.label}" durumundan "${stageInfo.label}" durumuna güncellendi.`
+    });
+  }
+
+  // 2. Proforma Değişikliği Logu (Sadece 2. Adımda yapılır)
+  if (currentEditingRequestProforma.file && (!previousProformaFile || previousProformaFile !== currentEditingRequestProforma.file || previousProformaNo !== proformaNo || previousProformaAmt !== proformaAmt)) {
+    currentLogs.push({
+      id: 'log-' + Date.now() + '-prof',
+      timestamp: nowPrecise.iso,
+      date_formatted: nowPrecise.date,
+      time_formatted: nowPrecise.time,
+      action_title: '2. Adım: Tedarikçi Proforma Faturası Kaydedildi',
+      action_desc: `Proforma Belgesi: ${currentEditingRequestProforma.name || 'proforma.pdf'} • Belge No: ${proformaNo || 'Belirtilmedi'} • Tutar: ${proformaAmt || 'Belirtilmedi'}`
+    });
+  } else if (!currentEditingRequestProforma.file && previousProformaFile) {
+    currentLogs.push({
+      id: 'log-' + Date.now() + '-prof-del',
+      timestamp: nowPrecise.iso,
+      date_formatted: nowPrecise.date,
+      time_formatted: nowPrecise.time,
+      action_title: '2. Adım: Proforma Faturası Kaldırıldı',
+      action_desc: 'Ekli olan tedarikçi proforma belgesi silindi.'
+    });
+  }
+
+  // 3. Görsel Değişikliği Logu
+  if (currentEditingRequestImage && (!previousImage || previousImage !== currentEditingRequestImage)) {
+    currentLogs.push({
+      id: 'log-' + Date.now() + '-img',
+      timestamp: nowPrecise.iso,
+      date_formatted: nowPrecise.date,
+      time_formatted: nowPrecise.time,
+      action_title: 'Sohbet / Parça Görseli Güncellendi',
+      action_desc: 'Talebe yeni WeChat/WhatsApp ekran görüntüsü veya parça fotoğrafı eklendi.'
+    });
+  } else if (!currentEditingRequestImage && previousImage) {
+    currentLogs.push({
+      id: 'log-' + Date.now() + '-img-del',
+      timestamp: nowPrecise.iso,
+      date_formatted: nowPrecise.date,
+      time_formatted: nowPrecise.time,
+      action_title: 'Sohbet / Parça Görseli Kaldırıldı',
+      action_desc: 'Ekli olan görsel talep kartından silindi.'
+    });
+  }
+
+  // 4. Görüşme Notu Değişikliği Logu
+  if (notes !== previousNotes && notes.length > 0) {
+    currentLogs.push({
+      id: 'log-' + Date.now() + '-note',
+      timestamp: nowPrecise.iso,
+      date_formatted: nowPrecise.date,
+      time_formatted: nowPrecise.time,
+      action_title: 'Açıklama / Görüşme Notu Güncellendi',
+      action_desc: `Not detayı: "${notes.length > 90 ? notes.substring(0, 90) + '...' : notes}"`
+    });
   }
 
   // Anında bellek durumunu güncelle
@@ -1622,6 +2023,7 @@ async function saveRequestDetailChanges() {
     existing.proforma_amount = currentEditingRequestProforma.amount || '';
     existing.proforma_notes = currentEditingRequestProforma.notes || '';
     existing.proforma_date = currentEditingRequestProforma.date || '';
+    existing.activity_log = currentLogs;
   }
 
   closeRequestDetailModal();
@@ -1639,12 +2041,13 @@ async function saveRequestDetailChanges() {
     proforma_no: currentEditingRequestProforma.no || '',
     proforma_amount: currentEditingRequestProforma.amount || '',
     proforma_notes: currentEditingRequestProforma.notes || '',
-    proforma_date: currentEditingRequestProforma.date || ''
+    proforma_date: currentEditingRequestProforma.date || '',
+    activity_log: currentLogs
   });
 
   await loadAllData();
   renderDashboard();
-  showToast(`✓ Talep, aşama ve görsel değişiklikleri başarıyla kaydedildi.`);
+  showToast(`✓ Talep, ${currentEditingRequestStage}. aşama ve zaman günlüğü başarıyla kaydedildi.`);
 }
 
 async function deleteCurrentRequest() {
@@ -1664,18 +2067,21 @@ async function deleteCurrentRequest() {
   }
 }
 
-// ==================== 8. PROFORMA FATURA İNCELEME & GÖRÜNTÜLEME ====================
+// ==================== 8. PROFORMA FATURA İNCELEME & GÖRÜNTÜLEME (MODAL ÇAKIŞMASI ÇÖZÜMÜ) ====================
 let currentActiveViewingProforma = null;
+let returnToRequestDetailModalOnClose = false;
 
 function openProformaViewer(idOrNo) {
   const req = appState.requests.find(r => r.id === idOrNo || r.request_no === idOrNo);
   if (!req || !req.proforma_file) {
     if (req) {
       openRequestDetailModal(idOrNo);
-      showToast('Bu talebe henüz proforma eklenmemiş. Aşağıdaki alandan ekleyebilirsiniz.');
+      showToast('Bu talebe henüz proforma eklenmemiş. 2. Adıma geçerek ekleyebilirsiniz.');
     }
     return;
   }
+
+  returnToRequestDetailModalOnClose = false;
 
   currentActiveViewingProforma = {
     file: req.proforma_file,
@@ -1693,6 +2099,16 @@ function openProformaViewer(idOrNo) {
 function openCurrentProformaViewer() {
   if (currentEditingRequestProforma && currentEditingRequestProforma.file) {
     const req = appState.requests.find(r => r.id === currentViewingRequestId || r.request_no === currentViewingRequestId);
+    
+    // Talep detay modalını arkada üst üste bindirmemek için gizle ve geri dönüş bayrağını aktif et
+    const reqModal = document.getElementById('requestDetailModal');
+    if (reqModal && !reqModal.classList.contains('hidden')) {
+      reqModal.classList.add('hidden');
+      returnToRequestDetailModalOnClose = true;
+    } else {
+      returnToRequestDetailModalOnClose = false;
+    }
+
     currentActiveViewingProforma = {
       file: currentEditingRequestProforma.file,
       name: currentEditingRequestProforma.name || 'proforma_belgesi.pdf',
@@ -1755,6 +2171,13 @@ function closeProformaViewer() {
   const iframe = document.getElementById('proformaPdfIframe');
   if (iframe) iframe.src = '';
   currentActiveViewingProforma = null;
+
+  // Eğer talep detay modalından açıldıysa, talep detay modalını temiz bir şekilde geri getir
+  if (returnToRequestDetailModalOnClose) {
+    const reqModal = document.getElementById('requestDetailModal');
+    if (reqModal) reqModal.classList.remove('hidden');
+    returnToRequestDetailModalOnClose = false;
+  }
 }
 
 function downloadCurrentProformaFromViewer() {

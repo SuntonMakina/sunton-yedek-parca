@@ -169,7 +169,61 @@ const INITIAL_DATA = {
       proforma_date: '',
       created_at: new Date(Date.now() - 3600000 * 26).toISOString(),
       created_at_date: '07 Ekim 2026',
-      created_at_time: '09:30'
+      created_at_time: '09:30',
+      activity_log: [
+        {
+          id: 'log-1-4',
+          timestamp: new Date(Date.now() - 3600000 * 7).toISOString(),
+          date_formatted: '08 Ekim 2026',
+          time_formatted: '04:12:49.884',
+          action_title: '4. Adım: Uluslararası Sevkiyatta / Gemiye Yüklendi',
+          action_desc: 'Konteyner Pekin/Şanghay limanında Maersk Line gemisine yüklendi. Gemi Takip No: MAEU902194 (Ambarlı Limanı varışlı).',
+          stage_step: 4,
+          stage_label: '4. Adım: Uluslararası Sevkiyatta / Yolda',
+          badge_class: 'bg-blue-100 text-blue-900 border-blue-300',
+          icon: 'directions_boat',
+          user: 'Maersk Logistics API'
+        },
+        {
+          id: 'log-1-3',
+          timestamp: new Date(Date.now() - 3600000 * 16).toISOString(),
+          date_formatted: '07 Ekim 2026',
+          time_formatted: '18:20:05.112',
+          action_title: "3. Adım: Çin Fabrika Üretimi Tamamlandı & Çıkış Bekliyor",
+          action_desc: 'HSG Shanghai fabrikası 14 adet valf üretim ve basınç testlerini tamamladı, liman antrepo sahasına sevk edildi.',
+          stage_step: 3,
+          stage_label: "3. Adım: Çin'den Çıkış Bekliyor",
+          badge_class: 'bg-orange-100 text-orange-900 border-orange-300',
+          icon: 'flight_takeoff',
+          user: 'Li Wei (HSG Fabrika Sorumlusu)'
+        },
+        {
+          id: 'log-1-2',
+          timestamp: new Date(Date.now() - 3600000 * 22).toISOString(),
+          date_formatted: '07 Ekim 2026',
+          time_formatted: '11:45:28.450',
+          action_title: '2. Adım: Tedarikçi Talebi Onayladı & İmalata Aldı',
+          action_desc: 'Tedarikçi sipariş onayını WeChat üzerinden iletti, acil üretim hattına alındı.',
+          stage_step: 2,
+          stage_label: '2. Adım: Tedarikçi Onayladı / Hazırlanıyor',
+          badge_class: 'bg-amber-100 text-amber-900 border-amber-300',
+          icon: 'task_alt',
+          user: 'Berkhan (Sistem Yöneticisi)'
+        },
+        {
+          id: 'log-1-1',
+          timestamp: new Date(Date.now() - 3600000 * 26).toISOString(),
+          date_formatted: '07 Ekim 2026',
+          time_formatted: '09:30:14.210',
+          action_title: '1. Adım: Parça Talebi Açıldı',
+          action_desc: 'Sunton Makine Sanayi A.Ş. tarafından 14 adet Hidrolik Pompa Valfi için Kritik öncelikli talep oluşturuldu.',
+          stage_step: 1,
+          stage_label: '1. Adım: Talep Açıldı / Mesaj Bekleniyor',
+          badge_class: 'bg-slate-100 text-slate-800 border-slate-200',
+          icon: 'add_circle',
+          user: 'Berkhan (Sistem Yöneticisi)'
+        }
+      ]
     },
     {
       id: 'req-2',
@@ -195,7 +249,48 @@ const INITIAL_DATA = {
       proforma_date: '07 Ekim 2026, 21:30',
       created_at: new Date(Date.now() - 3600000 * 14).toISOString(),
       created_at_date: '07 Ekim 2026',
-      created_at_time: '21:15'
+      created_at_time: '21:15',
+      activity_log: [
+        {
+          id: 'log-2-3',
+          timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
+          date_formatted: '08 Ekim 2026',
+          time_formatted: '08:45:51.104',
+          action_title: "3. Adım: Çin Antrepo Hazır & Çıkış Bekliyor",
+          action_desc: 'Rotor dişli grubu döküm ve taşlama işlemleri tamamlandı, Ningbo antrepo çıkışı bekleniyor.',
+          stage_step: 3,
+          stage_label: "3. Adım: Çin'den Çıkış Bekliyor",
+          badge_class: 'bg-orange-100 text-orange-900 border-orange-300',
+          icon: 'flight_takeoff',
+          user: 'Zhang Ming (Ningbo Foundry)'
+        },
+        {
+          id: 'log-2-2',
+          timestamp: new Date(Date.now() - 3600000 * 13 - 15 * 60000).toISOString(),
+          date_formatted: '07 Ekim 2026',
+          time_formatted: '21:30:12.790',
+          action_title: '2. Adım: Tedarikçi Onayladı & Proforma Eklendi',
+          action_desc: 'Tedarikçi HSG Ningbo siparişi teyit etti. Proforma Faturası No: PI-2026-4412, Tutar: $3,850 USD sisteme yüklendi ve kilitlendi.',
+          stage_step: 2,
+          stage_label: '2. Adım: Tedarikçi Onayladı / Hazırlanıyor',
+          badge_class: 'bg-amber-100 text-amber-900 border-amber-300',
+          icon: 'receipt_long',
+          user: 'Berkhan (Sistem Yöneticisi)'
+        },
+        {
+          id: 'log-2-1',
+          timestamp: new Date(Date.now() - 3600000 * 14).toISOString(),
+          date_formatted: '07 Ekim 2026',
+          time_formatted: '21:15:32.418',
+          action_title: '1. Adım: Parça Talebi Açıldı',
+          action_desc: 'Sunton Makine tarafından 28 adet Ana Rotor Dişli Grubu (SKU-4412-STN) talebi açıldı.',
+          stage_step: 1,
+          stage_label: '1. Adım: Talep Açıldı / Mesaj Bekleniyor',
+          badge_class: 'bg-slate-100 text-slate-800 border-slate-200',
+          icon: 'add_circle',
+          user: 'Berkhan (Sistem Yöneticisi)'
+        }
+      ]
     },
     {
       id: 'req-3',
@@ -221,7 +316,35 @@ const INITIAL_DATA = {
       proforma_date: '08 Ekim 2026, 08:30',
       created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
       created_at_date: '08 Ekim 2026',
-      created_at_time: '07:45'
+      created_at_time: '07:45',
+      activity_log: [
+        {
+          id: 'log-3-2',
+          timestamp: new Date(Date.now() - 3600000 * 3 - 15 * 60000).toISOString(),
+          date_formatted: '08 Ekim 2026',
+          time_formatted: '08:30:24.930',
+          action_title: '2. Adım: Tedarikçi Onayladı & Proforma Eklendi',
+          action_desc: 'Anadolu Hidrolik Makina (Kerem Bey) ile görüşüldü. Proforma No: PI-2026-8819, Tutar: 125.000 ₺ yüklendi ve paketlemeye geçildi.',
+          stage_step: 2,
+          stage_label: '2. Adım: Tedarikçi Onayladı / Hazırlanıyor',
+          badge_class: 'bg-amber-100 text-amber-900 border-amber-300',
+          icon: 'receipt_long',
+          user: 'Berkhan (Sistem Yöneticisi)'
+        },
+        {
+          id: 'log-3-1',
+          timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
+          date_formatted: '08 Ekim 2026',
+          time_formatted: '07:45:10.512',
+          action_title: '1. Adım: Parça Talebi Açıldı',
+          action_desc: '45 adet PLC Kontrol Kartı v3 (SKU-7738-HSG) talebi açıldı.',
+          stage_step: 1,
+          stage_label: '1. Adım: Talep Açıldı / Mesaj Bekleniyor',
+          badge_class: 'bg-slate-100 text-slate-800 border-slate-200',
+          icon: 'add_circle',
+          user: 'Berkhan (Sistem Yöneticisi)'
+        }
+      ]
     },
     {
       id: 'req-4',
@@ -247,7 +370,61 @@ const INITIAL_DATA = {
       proforma_date: '',
       created_at: new Date(Date.now() - 3600000 * 72).toISOString(),
       created_at_date: '05 Ekim 2026',
-      created_at_time: '14:20'
+      created_at_time: '14:20',
+      activity_log: [
+        {
+          id: 'log-4-6',
+          timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
+          date_formatted: '08 Ekim 2026',
+          time_formatted: '10:15:33.405',
+          action_title: '6. Adım: Merkez Depo Teslim Edildi & Stok Girişi Yapıldı',
+          action_desc: '156 adet Ağır Hizmet Keçe Seti teslim alındı. Merkez Depo Raf No: B-14 stok sistemine işlendi.',
+          stage_step: 6,
+          stage_label: '6. Adım: Merkez Depo Teslim Edildi',
+          badge_class: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+          icon: 'check_circle',
+          user: 'İstanbul Merkez Depo Sorumlusu'
+        },
+        {
+          id: 'log-4-4',
+          timestamp: new Date(Date.now() - 3600000 * 24).toISOString(),
+          date_formatted: '07 Ekim 2026',
+          time_formatted: '11:30:55.770',
+          action_title: '4. Adım: Karayolu Sevkiyatında / Yolda',
+          action_desc: 'Kargo Bursa çıkışı yaptı. Taşıyıcı: Kuehne+Nagel (Takip: BUR-ANT-2024-405).',
+          stage_step: 4,
+          stage_label: '4. Adım: Uluslararası Sevkiyatta / Yolda',
+          badge_class: 'bg-blue-100 text-blue-900 border-blue-300',
+          icon: 'local_shipping',
+          user: 'Marmara Yedek Parça Ltd.'
+        },
+        {
+          id: 'log-4-2',
+          timestamp: new Date(Date.now() - 3600000 * 70).toISOString(),
+          date_formatted: '05 Ekim 2026',
+          time_formatted: '16:05:44.290',
+          action_title: '2. Adım: Tedarikçi Onayladı & Hazırlanıyor',
+          action_desc: 'Marmara Yedek Parça Ltd. (Ayşe Hanım) siparişi onayladı, paketleme tamamlandı.',
+          stage_step: 2,
+          stage_label: '2. Adım: Tedarikçi Onayladı / Hazırlanıyor',
+          badge_class: 'bg-amber-100 text-amber-900 border-amber-300',
+          icon: 'task_alt',
+          user: 'Berkhan (Sistem Yöneticisi)'
+        },
+        {
+          id: 'log-4-1',
+          timestamp: new Date(Date.now() - 3600000 * 72).toISOString(),
+          date_formatted: '05 Ekim 2026',
+          time_formatted: '14:20:00.120',
+          action_title: '1. Adım: Parça Talebi Açıldı',
+          action_desc: 'Ankara Montaj Hattı #3 için 156 adet Ağır Hizmet Keçe Seti siparişi açıldı.',
+          stage_step: 1,
+          stage_label: '1. Adım: Talep Açıldı / Mesaj Bekleniyor',
+          badge_class: 'bg-slate-100 text-slate-800 border-slate-200',
+          icon: 'add_circle',
+          user: 'Berkhan (Sistem Yöneticisi)'
+        }
+      ]
     }
   ],
   reminders: [
@@ -627,7 +804,7 @@ class SupabaseService {
       try {
         const { data, error } = await this.client.from('requests').select('*').order('created_at', { ascending: false });
         if (!error && data && data.length > 0) {
-          // Merge remote data with local rich fields (chat_image, proforma_*) to prevent accidental image wiping
+          // Merge remote data with local rich fields (chat_image, proforma_*, activity_log) to prevent accidental data wiping
           const mergedList = data.map(remoteItem => {
             const localMatch = localList.find(l => 
               (l.id && remoteItem.id && l.id === remoteItem.id) ||
@@ -637,7 +814,7 @@ class SupabaseService {
               return {
                 ...localMatch,
                 ...remoteItem,
-                // Preserve local media if remote column is null or empty
+                // Preserve local media and logs if remote is null or empty
                 chat_image: remoteItem.chat_image || localMatch.chat_image || '',
                 proforma_file: remoteItem.proforma_file || localMatch.proforma_file || '',
                 proforma_name: remoteItem.proforma_name || localMatch.proforma_name || '',
@@ -645,7 +822,8 @@ class SupabaseService {
                 proforma_no: remoteItem.proforma_no || localMatch.proforma_no || '',
                 proforma_amount: remoteItem.proforma_amount || localMatch.proforma_amount || '',
                 proforma_notes: remoteItem.proforma_notes || localMatch.proforma_notes || '',
-                proforma_date: remoteItem.proforma_date || localMatch.proforma_date || ''
+                proforma_date: remoteItem.proforma_date || localMatch.proforma_date || '',
+                activity_log: localMatch.activity_log || remoteItem.activity_log || []
               };
             }
             return remoteItem;
@@ -713,7 +891,8 @@ class SupabaseService {
       hsg_status: req.hsg_status || 'İşleme Alındı',
       created_at: req.created_at || now.toISOString(),
       created_at_date: req.created_at_date || trDateFormatted,
-      created_at_time: req.created_at_time || trTimeFormatted
+      created_at_time: req.created_at_time || trTimeFormatted,
+      activity_log: req.activity_log || []
     };
 
     list.unshift(clean);
@@ -813,7 +992,8 @@ class SupabaseService {
         proforma_no: req.proforma_no !== undefined ? req.proforma_no : (list[idx].proforma_no || ''),
         proforma_amount: req.proforma_amount !== undefined ? req.proforma_amount : (list[idx].proforma_amount || ''),
         proforma_notes: req.proforma_notes !== undefined ? req.proforma_notes : (list[idx].proforma_notes || ''),
-        proforma_date: req.proforma_date !== undefined ? req.proforma_date : (list[idx].proforma_date || '')
+        proforma_date: req.proforma_date !== undefined ? req.proforma_date : (list[idx].proforma_date || ''),
+        activity_log: req.activity_log !== undefined ? req.activity_log : (list[idx].activity_log || [])
       };
       list[idx] = updatedItem;
     } else {
@@ -826,6 +1006,7 @@ class SupabaseService {
         quantity: parseInt(req.quantity) || 1,
         chat_image: req.chat_image || '',
         proforma_file: req.proforma_file || '',
+        activity_log: req.activity_log || [],
         created_at: req.created_at || new Date().toISOString()
       };
       list.unshift(updatedItem);

@@ -814,13 +814,13 @@
           <span class="text-[11px] font-bold px-2 py-0.5 rounded-full" id="reqDetProformaStatusBadge">Ekli Belge Yok</span>
         </label>
 
-        <!-- 2. Adım Vurgu Bildirimi -->
-        <div class="mb-2.5 p-2 bg-amber-100/70 border border-amber-300 rounded-lg text-xs text-amber-950 flex items-center justify-between hidden" id="reqDetStep2Highlight">
-          <span class="flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-[16px] text-amber-700">info</span>
-            <span><strong>2. Aşama Gereksinimi:</strong> Tedarikçi onay teyidi ve proforma faturasını ekleyin.</span>
+        <!-- Aşama Durum Bildirimi (Adım 1, Adım 2 veya Adım 3+ Kilitli) -->
+        <div class="mb-3 p-2.5 rounded-lg text-xs flex items-center justify-between transition-all" id="reqDetProformaStepNotice">
+          <span class="flex items-center gap-1.5" id="reqDetProformaStepNoticeText">
+            <span class="material-symbols-outlined text-[16px]">info</span>
+            <span>Bildirim</span>
           </span>
-          <span class="text-[10px] font-bold uppercase bg-amber-200 px-1.5 py-0.5 rounded">Adım 2</span>
+          <span class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded font-mono" id="reqDetProformaStepNoticeBadge">ADIM</span>
         </div>
 
         <!-- Proforma Bilgi & İnceleme Kartı (Varsa) -->
@@ -835,14 +835,14 @@
                 <div class="text-xs text-slate-600 mt-0.5 flex items-center gap-2 flex-wrap">
                   <span id="reqDetProformaNoBadge" class="font-mono font-semibold text-blue-700">No: -</span>
                   <span id="reqDetProformaAmountBadge" class="font-bold text-emerald-700">Tutar: -</span>
-                  <span id="reqDetProformaDateBadge" class="text-[11px] text-slate-400">📅 -</span>
+                  <span id="reqDetProformaDateBadge" class="text-[11px] text-slate-500 font-mono">📅 -</span>
                 </div>
               </div>
             </div>
             
             <!-- Hızlı İnceleme Butonları -->
             <div class="flex items-center gap-1.5 shrink-0">
-              <button class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer shadow-xs transition-colors" onclick="openCurrentProformaViewer()" type="button" title="Proformayı Tam Ekran İncele">
+              <button class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors" onclick="openCurrentProformaViewer()" type="button" title="Proformayı Tam Ekran İncele">
                 <span class="material-symbols-outlined text-[16px]">visibility</span>
                 <span>İncele</span>
               </button>
@@ -853,19 +853,19 @@
           </div>
         </div>
 
-        <!-- Proforma Yükleme / Değiştirme Girişi -->
-        <div class="space-y-2">
+        <!-- Proforma Yükleme / Değiştirme Girişi (Sadece 2. Adımda Açık) -->
+        <div class="space-y-2" id="reqDetProformaInputsWrapper">
           <div class="grid grid-cols-2 gap-2" id="reqDetProformaInputsGroup">
             <div>
-              <input class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 outline-none focus:border-amber-600" id="reqDetProformaNoInput" placeholder="Proforma No (örn: PI-2026-8819)" type="text"/>
+              <input class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 outline-none focus:border-amber-600 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed" id="reqDetProformaNoInput" placeholder="Proforma No (örn: PI-2026-8819)" type="text"/>
             </div>
             <div>
-              <input class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 outline-none focus:border-amber-600" id="reqDetProformaAmountInput" placeholder="Tutar (örn: $4,850 USD)" type="text"/>
+              <input class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 outline-none focus:border-amber-600 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed" id="reqDetProformaAmountInput" placeholder="Tutar (örn: $4,850 USD)" type="text"/>
             </div>
           </div>
 
-          <div class="flex items-center gap-2 flex-wrap">
-            <button class="text-xs text-amber-900 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg border border-amber-300 font-semibold cursor-pointer transition-colors flex items-center gap-1" onclick="document.getElementById('reqDetProformaUploadInput').click()" type="button">
+          <div class="flex items-center gap-2 flex-wrap" id="reqDetProformaButtonsGroup">
+            <button class="text-xs text-amber-900 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg border border-amber-300 font-semibold cursor-pointer transition-colors flex items-center gap-1" id="btnReqDetProformaUpload" onclick="document.getElementById('reqDetProformaUploadInput').click()" type="button">
               <span class="material-symbols-outlined text-[16px]">upload_file</span>
               <span id="btnReqDetProformaUploadText">Proforma Faturası Yükle (PDF / Görsel)</span>
             </button>
@@ -917,6 +917,22 @@
         <textarea class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:bg-white focus:border-blue-600 resize-none" id="reqDetNotes" placeholder="Görüşme notu veya takip ayrıntısı..." rows="2"></textarea>
       </div>
 
+      <!-- ==================== ADIM ADIM İŞLEM VE SAAT/SALİSE ZAMAN ÇİZELGESİ (TIMELINE) ==================== -->
+      <div class="mb-5 p-4 bg-slate-50/80 rounded-xl border border-slate-200">
+        <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-200">
+          <label class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px] text-blue-600">history_toggle_off</span>
+            <span>Adım Adım İşlem & Zaman Günlüğü (Saat/Salise Hassasiyeti)</span>
+          </label>
+          <span class="text-[11px] font-mono font-bold text-slate-500 bg-slate-200/80 px-2 py-0.5 rounded" id="reqDetTimelineCount">0 İşlem Kaydı</span>
+        </div>
+
+        <!-- Zaman Çizelgesi Listesi -->
+        <div class="space-y-3 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-slate-200 pl-1 py-1" id="reqDetTimelineContainer">
+          <!-- JS ile render edilir -->
+        </div>
+      </div>
+
       <!-- Modal Footer -->
       <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
         <button class="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-semibold cursor-pointer transition-colors" onclick="deleteCurrentRequest()" type="button">
@@ -936,7 +952,7 @@
   </div>
 
   <!-- ==================== MODAL 7: RESİM BÜYÜTME (LIGHTBOX) ==================== -->
-  <div class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-60 hidden flex items-center justify-center p-4" id="imageLightboxModal" onclick="closeImageLightbox()">
+  <div class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[9995] hidden flex items-center justify-center p-4" id="imageLightboxModal" style="z-index: 9995;" onclick="closeImageLightbox()">
     <div class="relative max-w-4xl max-h-[90vh] flex flex-col items-center justify-center" onclick="event.stopPropagation()">
       <button class="absolute -top-10 right-0 text-white hover:text-slate-300 text-2xl font-bold cursor-pointer" onclick="closeImageLightbox()">✕</button>
       <img alt="Büyütülmüş Görsel" class="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain border border-slate-700" id="lightboxImage" src=""/>
@@ -944,7 +960,7 @@
   </div>
 
   <!-- ==================== MODAL 8: PROFORMA FATURA İNCELEME & GÖRÜNTÜLEME ==================== -->
-  <div class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-70 hidden flex items-center justify-center p-3 sm:p-5" id="proformaViewerModal" onclick="closeProformaViewer()">
+  <div class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[9990] hidden flex items-center justify-center p-3 sm:p-5" id="proformaViewerModal" style="z-index: 9990;" onclick="closeProformaViewer()">
     <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full border border-slate-700 flex flex-col max-h-[95vh] overflow-hidden" onclick="event.stopPropagation()">
       
       <!-- Modal Header -->
@@ -963,6 +979,7 @@
         </div>
         
         <div class="flex items-center gap-2">
+          <button class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold cursor-pointer flex items-center gap-1.5 transition-colors mr-1 shadow-xs" onclick="closeProformaViewer()" type="button" title="Talep Detayına Geri Dön"><span class="material-symbols-outlined text-[16px]">arrow_back</span><span>Talep Detayına Dön</span></button>
           <button class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold cursor-pointer border border-blue-200 flex items-center gap-1 transition-colors" id="btnProformaDownload" onclick="downloadCurrentProformaFromViewer()" type="button">
             <span class="material-symbols-outlined text-[16px]">download</span>
             <span>İndir</span>
